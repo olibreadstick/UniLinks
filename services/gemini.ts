@@ -1,7 +1,7 @@
 
 import { GoogleGenAI, Type, GenerateContentResponse } from "@google/genai";
 
-const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+const getAI = () => new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const isQuotaError = (err: any) => {
   const msg = err?.message?.toLowerCase() || "";
