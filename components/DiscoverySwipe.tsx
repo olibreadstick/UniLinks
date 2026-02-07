@@ -2,13 +2,15 @@
 import React, { useState, useEffect } from 'react';
 import { DiscoveryItem, DiscoveryType } from '../types';
 import { getMatchReason } from '../services/gemini';
+import HandshakeIcon from '../handshake.png';
+
 
 const CATEGORIES = [
-  { id: 'all', label: 'All Discovery', icon: '🌍' },
-  { id: 'courses', label: 'Courses & Study', icon: '📚' },
-  { id: 'clubs', label: 'Clubs & Orgs', icon: '🤝' },
-  { id: 'events', label: 'Events & Parties', icon: '🎉' },
-  { id: 'networking', label: 'Networking', icon: '🏢' },
+  { id: 'all', label: 'All Discovery', icon: '' },
+  { id: 'courses', label: 'Courses & Study', icon: '' },
+  { id: 'clubs', label: 'Clubs & Orgs', icon: '' },
+  { id: 'events', label: 'Events & Parties', icon: '' },
+  { id: 'networking', label: 'Networking', icon: '' },
 ];
 
 const SUBCATEGORIES = [
@@ -115,8 +117,7 @@ const DiscoverySwipe: React.FC<DiscoverySwipeProps> = ({ onHeart, externalItems 
   };
 
   return (
-    <div className="relative w-full h-full flex flex-col items-center justify-start max-w-4xl mx-auto py-6 overflow-hidden">
-      {/* Filters Bar */}
+    <div className="relative w-full min-h-screen flex flex-col items-center justify-start py-6 overflow-hidden bg-gradient-to-br from-[#6A0B17] via-[#B5122A] to-[#ED1B2F]">
       <div className="w-full mb-8 px-4 overflow-x-auto">
         <div className="flex gap-4 min-w-max pb-2">
           {CATEGORIES.map(cat => (
@@ -150,8 +151,9 @@ const DiscoverySwipe: React.FC<DiscoverySwipeProps> = ({ onHeart, externalItems 
       </div>
 
       {filteredData.length > 0 ? (
-        <div className="w-full max-w-lg flex flex-col items-center">
-          <div className={`relative w-full aspect-[4/5.5] rounded-[3.5rem] overflow-hidden shadow-2xl transition-all duration-500 ease-out bg-white border border-slate-50 ${
+        <div className="w-full max-w-4xl flex flex-col items-center">
+
+          <div className={`relative w-full aspect-[16/9] rounded-[3.5rem] overflow-hidden shadow-2xl transition-all duration-500 ease-out bg-transparent ${
             swipeDir === 'left' ? '-translate-x-full opacity-0 -rotate-12 scale-90' : 
             swipeDir === 'right' ? 'translate-x-full opacity-0 rotate-12 scale-90' : 'translate-x-0 scale-100'
           }`}>
@@ -182,7 +184,7 @@ const DiscoverySwipe: React.FC<DiscoverySwipeProps> = ({ onHeart, externalItems 
 
               <div className="flex flex-wrap gap-2">
                 {currentItem.tags.map(tag => (
-                  <span key={tag} className="text-[10px] bg-white text-mcgill-red font-black px-4 py-1.5 rounded-full uppercase tracking-tighter shadow-lg">
+                  <span key={tag} className="text-[10px] bg-white text-red-700 font-black px-4 py-1.5 rounded-full uppercase tracking-tighter shadow-lg">
                     {tag}
                   </span>
                 ))}
@@ -212,7 +214,11 @@ const DiscoverySwipe: React.FC<DiscoverySwipeProps> = ({ onHeart, externalItems 
               onClick={() => handleSwipe('right')}
               className="w-20 h-20 rounded-full bg-mcgill-red shadow-2xl shadow-red-100 flex items-center justify-center text-white hover:bg-red-600 hover:scale-110 active:scale-90 transition-all group"
             >
-              <svg className="w-8 h-8 group-hover:scale-125 transition-transform" fill="currentColor" viewBox="0 0 20 20"><path fillRule="evenodd" d="M3.172 5.172a4 4 0 015.656 0L10 6.343l1.172-1.171a4 4 0 115.656 5.656L10 17.657l-6.828-6.829a4 4 0 010-5.656z" clipRule="evenodd"></path></svg>
+              <img
+              src={HandshakeIcon}
+              alt="Connect"
+              className="w-11 h-11 group-hover:scale-125 transition-transform"
+            />
             </button>
           </div>
         </div>

@@ -8,9 +8,9 @@ interface NavProps {
 
 const Navigation: React.FC<NavProps> = ({ activeTab, setActiveTab }) => {
   const tabs = [
-    { id: 'discover', label: 'Discover', icon: '✨' },
-    { id: 'coach', label: 'Social Coach', icon: '🎙️' },
-    { id: 'community', label: 'McGill Hub', icon: '🏰' },
+    { id: 'discover', label: 'Discover', icon: '' },
+    { id: 'coach', label: 'Social Coach', icon: '' },
+    { id: 'community', label: 'McGill Hub', icon: '' },
     { id: 'profile', label: 'Profile', icon: '👤' },
   ];
 
@@ -23,7 +23,7 @@ const Navigation: React.FC<NavProps> = ({ activeTab, setActiveTab }) => {
             <div className="w-10 h-10 bg-mcgill-red rounded-xl flex items-center justify-center shadow-lg shadow-red-100">
               <span className="text-white text-xl font-black">U</span>
             </div>
-            <h1 className="text-xl font-black tracking-tighter text-slate-900">UniConnex</h1>
+            <h1 className="text-xl font-black tracking-tighter text-slate-900">UniLinks</h1>
           </div>
           <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-slate-400 pl-1">McGill Edition</p>
         </div>
