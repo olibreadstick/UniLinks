@@ -8,6 +8,20 @@ import Welcome from './components/Welcome';
 import { generateRecommendations } from './services/gemini';
 import { DiscoveryItem, DiscoveryType, CollabRequest, UserProfile } from './types';
 
+const ACCOUNTS_KEY = 'uc_accounts';
+const ACTIVE_ACCOUNT_KEY = 'uc_active_account';
+
+const profileKey = (id: string) => `uc_profile_${id}`;
+const heartsKey = (id: string) => `uc_hearted_${id}`;
+const collabsKey = (id: string) => `uc_collabs_${id}`;
+
+type Account = { id: string; name: string; createdAt: number };
+
+const makeAccountId = () => `acc_${Date.now()}_${Math.random().toString(16).slice(2)}`;
+
+
+
+
 const FACULTIES = [
   { id: 'science', name: 'Faculty of Science', courses: ['BIOL 111', 'CHEM 110', 'PHYS 131', 'MATH 140', 'COMP 202'] },
   { id: 'arts', name: 'Faculty of Arts', courses: ['PSYC 100', 'SOCI 210', 'HIST 201', 'ECON 208', 'POLI 244'] },
@@ -28,19 +42,15 @@ const App: React.FC = () => {
   const [onboardingComplete, setOnboardingComplete] = useState(false);
   
   // Profile State
-  const [userProfile, setUserProfile] = useState<UserProfile>({
-    id: 'user_mcgill_1',
-    name: 'McGill Student',
-    major: '',
-    interests: [],
-    bio: 'Prospective high-achiever.',
-    avatar: '',
-    gpa: '3.8',
-    skills: ['Python', 'Teamwork', 'Research'],
-    experience: ['Research Assistant @ McGill', 'Intern @ Shopify']
-  });
+  // Accounts
+  const [accounts, setAccounts] = useState<Account[]>([]);
+  const [activeAccountId, setActiveAccountId] = useState<string | null>(null);
+
+  // Profile (loaded per account)
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
 
+  
   // Discovery & Hearting State
   const [heartedItems, setHeartedItems] = useState<DiscoveryItem[]>([]);
   const [collabRequests, setCollabRequests] = useState<CollabRequest[]>([]);
@@ -55,42 +65,85 @@ const App: React.FC = () => {
   const [hasPersonalKey, setHasPersonalKey] = useState(false);
 
   useEffect(() => {
-    const checkKey = async () => {
-      if ((window as any).aistudio?.hasSelectedApiKey) {
-        const has = await (window as any).aistudio.hasSelectedApiKey();
-        setHasPersonalKey(has);
-      }
-    };
-    checkKey();
+    const savedAccounts = localStorage.getItem(ACCOUNTS_KEY);
+    const savedActive = localStorage.getItem(ACTIVE_ACCOUNT_KEY);
+
+    const parsedAccounts: Account[] = savedAccounts ? JSON.parse(savedAccounts) : [];
+
+    // First time: create a default account
+    if (parsedAccounts.length === 0) {
+      const id = makeAccountId();
+      const defaultAcc: Account = { id, name: 'McGill Student', createdAt: Date.now() };
+      localStorage.setItem(ACCOUNTS_KEY, JSON.stringify([defaultAcc]));
+      localStorage.setItem(ACTIVE_ACCOUNT_KEY, id);
+      setAccounts([defaultAcc]);
+      setActiveAccountId(id);
+      return;
+    }
+
+    setAccounts(parsedAccounts);
+
+    const activeId =
+      savedActive && parsedAccounts.some(a => a.id === savedActive)
+        ? savedActive
+        : parsedAccounts[0].id;
+
+    setActiveAccountId(activeId);
+    localStorage.setItem(ACTIVE_ACCOUNT_KEY, activeId);
   }, []);
 
+
   useEffect(() => {
-    const savedProfile = localStorage.getItem('uc_profile');
-    const savedHearts = localStorage.getItem('uc_hearted');
-    const savedCollabs = localStorage.getItem('uc_collabs');
-    
-    if (savedProfile) {
-      setUserProfile(JSON.parse(savedProfile));
+    if (!activeAccountId) return;
+
+    const p = localStorage.getItem(profileKey(activeAccountId));
+    const h = localStorage.getItem(heartsKey(activeAccountId));
+    const c = localStorage.getItem(collabsKey(activeAccountId));
+
+    if (p) {
+      setUserProfile(JSON.parse(p));
       setOnboardingComplete(true);
       setShowWelcome(false);
+    } else {
+      // No profile yet => start onboarding for this account
+      setUserProfile({
+        id: activeAccountId,
+        name: accounts.find(a => a.id === activeAccountId)?.name || 'McGill Student',
+        major: '',
+        interests: [],
+        bio: 'Prospective high-achiever.',
+        avatar: '',
+        gpa: '3.8',
+        skills: ['Python', 'Teamwork', 'Research'],
+        experience: ['Research Assistant @ McGill', 'Intern @ Shopify'],
+      });
+      setOnboardingComplete(false);
+      setShowWelcome(false);
     }
-    if (savedHearts) setHeartedItems(JSON.parse(savedHearts));
-    if (savedCollabs) setCollabRequests(JSON.parse(savedCollabs));
-  }, []);
+
+    setHeartedItems(h ? JSON.parse(h) : []);
+    setCollabRequests(c ? JSON.parse(c) : []);
+  }, [activeAccountId, accounts]);
+
 
   useEffect(() => {
-    localStorage.setItem('uc_profile', JSON.stringify(userProfile));
-  }, [userProfile]);
+    if (!activeAccountId || !userProfile) return;
+    localStorage.setItem(profileKey(activeAccountId), JSON.stringify(userProfile));
+  }, [activeAccountId, userProfile]);
 
   useEffect(() => {
-    localStorage.setItem('uc_hearted', JSON.stringify(heartedItems));
-  }, [heartedItems]);
+    if (!activeAccountId) return;
+    localStorage.setItem(heartsKey(activeAccountId), JSON.stringify(heartedItems));
+  }, [activeAccountId, heartedItems]);
 
   useEffect(() => {
-    localStorage.setItem('uc_collabs', JSON.stringify(collabRequests));
-  }, [collabRequests]);
+    if (!activeAccountId) return;
+    localStorage.setItem(collabsKey(activeAccountId), JSON.stringify(collabRequests));
+  }, [activeAccountId, collabRequests]);
+
 
   useEffect(() => {
+    if (!userProfile) return;
     const fetchRecs = async () => {
       if (userProfile.interests.length > 0) {
         const suggestions = await generateRecommendations(userProfile.interests);
@@ -98,12 +151,14 @@ const App: React.FC = () => {
       }
     };
     if (activeTab === 'community' && onboardingComplete) fetchRecs();
-  }, [activeTab, onboardingComplete, userProfile.interests]);
+  }, [activeTab, onboardingComplete, userProfile]);
+
 
   const handleOnboardingComplete = (interests: string[], major: string) => {
-    setUserProfile(prev => ({ ...prev, interests, major }));
+    setUserProfile(prev => (prev ? { ...prev, interests, major } : prev));
     setOnboardingComplete(true);
   };
+
 
   const handleHeart = (item: DiscoveryItem) => {
     if (!heartedItems.find(h => h.id === item.id)) {
@@ -129,18 +184,22 @@ const App: React.FC = () => {
   };
 
   const toggleArrayItem = (field: 'skills' | 'experience', index: number, value: string) => {
-    const updated = [...userProfile[field]];
-    updated[index] = value;
-    setUserProfile({...userProfile, [field]: updated});
+    setUserProfile(prev => {
+      if (!prev) return prev;
+      const updated = [...prev[field]];
+      updated[index] = value;
+      return { ...prev, [field]: updated };
+    });
   };
 
   const addArrayItem = (field: 'skills' | 'experience') => {
-    setUserProfile({...userProfile, [field]: [...userProfile[field], '']});
+    setUserProfile(prev => (prev ? { ...prev, [field]: [...prev[field], ''] } : prev));
   };
 
   const removeArrayItem = (field: 'skills' | 'experience', index: number) => {
-    setUserProfile({...userProfile, [field]: userProfile[field].filter((_, i) => i !== index)});
+    setUserProfile(prev => (prev ? { ...prev, [field]: prev[field].filter((_, i) => i !== index) } : prev));
   };
+
 
   const handleUpdateKey = async () => {
     if ((window as any).aistudio?.openSelectKey) {
@@ -150,25 +209,37 @@ const App: React.FC = () => {
   };
 
   if (showWelcome) return <Welcome onStart={() => setShowWelcome(false)} />;
+  if (!userProfile) return null;
   if (!onboardingComplete) return <Onboarding onComplete={handleOnboardingComplete} />;
+
+
+  if (!userProfile) return null;
+
 
   const renderContent = () => {
     switch (activeTab) {
       case 'discover':
         return (
-          <div className="h-full flex flex-col p-6 lg:p-12 animate-in fade-in zoom-in-95 duration-500">
-            <header className="mb-6 max-w-4xl">
-              <span className="text-xs font-bold text-mcgill-red uppercase tracking-[0.3em] mb-2 block">Discovery</span>
-              <h1 className="text-4xl lg:text-5xl font-black text-slate-900 tracking-tight mb-4">Connect with McGill</h1>
-            </header>
-            <div className="flex-1">
-              <DiscoverySwipe 
-                onHeart={handleHeart} 
-                externalItems={collabRequests} 
-                userInterests={userProfile.interests} 
-              />
-            </div>
+          <div className="h-full flex flex-col items-start p-6 lg:p-12 animate-in fade-in zoom-in-95 duration-500">
+          <header className="w-full mb-6 px-8 py-6 text-left">
+          <span className="text-xs font-black text-white/80 uppercase tracking-[0.3em] mb-2 block">
+            Discovery
+          </span>
+          <h1 className="text-4xl lg:text-5xl font-black text-white tracking-tight">
+            Connect with McGill
+          </h1>
+        </header>
+
+
+          <div className="w-full flex-1">
+            <DiscoverySwipe
+              onHeart={handleHeart}
+              externalItems={collabRequests}
+              userInterests={userProfile.interests}
+            />
           </div>
+        </div>
+
         );
       case 'coach':
         return <AICoach />;
@@ -371,10 +442,34 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen lg:flex bg-[#fcfcfc] selection:bg-red-100 selection:text-mcgill-red">
-      <Navigation activeTab={activeTab} setActiveTab={setActiveTab} />
-      <main className="flex-1 min-h-screen lg:ml-0 overflow-y-auto relative">
-        {renderContent()}
+    <div className="min-h-screen lg:flex bg-gradient-to-br from-[#6A0B17] via-[#B5122A] to-[#ED1B2F]">
+    <Navigation
+      activeTab={activeTab}
+      setActiveTab={setActiveTab}
+      accounts={accounts}
+      activeAccountId={activeAccountId}
+      setActiveAccountId={(id) => {
+        setActiveAccountId(id);
+        localStorage.setItem(ACTIVE_ACCOUNT_KEY, id);
+        setActiveTab('discover'); // optional
+      }}
+    onCreateAccount={() => {
+      const id = makeAccountId();
+      const newAcc = { id, name: `McGill Student ${accounts.length + 1}`, createdAt: Date.now() };
+      const next = [newAcc, ...accounts];
+
+      setAccounts(next);
+      localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(next));
+
+      setActiveAccountId(id);
+      localStorage.setItem(ACTIVE_ACCOUNT_KEY, id);
+
+      setShowWelcome(false);
+      setOnboardingComplete(false);
+    }}
+  />
+<main className="flex-1 min-h-screen lg:ml-0 overflow-y-auto relative bg-transparent">
+      {renderContent()}
 
         {/* Persistent Floating Action Button */}
         <button 

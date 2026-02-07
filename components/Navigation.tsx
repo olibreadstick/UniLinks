@@ -1,12 +1,29 @@
-
 import React from 'react';
+
+interface Account {
+  id: string;
+  name: string;
+  createdAt: number;
+}
 
 interface NavProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
+
+  accounts: Account[];
+  activeAccountId: string | null;
+  setActiveAccountId: (id: string) => void;
+  onCreateAccount: () => void;
 }
 
-const Navigation: React.FC<NavProps> = ({ activeTab, setActiveTab }) => {
+const Navigation: React.FC<NavProps> = ({
+  activeTab,
+  setActiveTab,
+  accounts,
+  activeAccountId,
+  setActiveAccountId,
+  onCreateAccount,
+}) => {
   const tabs = [
     { id: 'discover', label: 'Discover', icon: '' },
     { id: 'coach', label: 'Social Coach', icon: '' },
@@ -14,18 +31,56 @@ const Navigation: React.FC<NavProps> = ({ activeTab, setActiveTab }) => {
     { id: 'profile', label: 'Profile', icon: '👤' },
   ];
 
+  const activeName =
+    accounts.find(a => a.id === activeAccountId)?.name || 'Select account';
+
   return (
     <>
       {/* Desktop Sidebar */}
       <nav className="hidden lg:flex flex-col w-72 bg-white border-r border-slate-100 h-screen sticky top-0 p-8">
-        <div className="mb-12">
+        <div className="mb-10">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-10 h-10 bg-mcgill-red rounded-xl flex items-center justify-center shadow-lg shadow-red-100">
               <span className="text-white text-xl font-black">U</span>
             </div>
             <h1 className="text-xl font-black tracking-tighter text-slate-900">UniLinks</h1>
           </div>
-          <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-slate-400 pl-1">McGill Edition</p>
+          <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-slate-400 pl-1">
+            McGill Edition
+          </p>
+
+          {/* Account Switcher */}
+          <div className="mt-6 bg-slate-50 border border-slate-100 rounded-2xl p-4">
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
+              Account
+            </p>
+
+            <div className="flex items-center gap-2">
+              <select
+                value={activeAccountId || ''}
+                onChange={(e) => setActiveAccountId(e.target.value)}
+                className="flex-1 px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:border-red-200"
+              >
+                {accounts.map(acc => (
+                  <option key={acc.id} value={acc.id}>
+                    {acc.name}
+                  </option>
+                ))}
+              </select>
+
+              <button
+                onClick={onCreateAccount}
+                className="px-3 py-2 rounded-xl bg-mcgill-red text-white text-xs font-black hover:bg-red-600 transition-colors"
+                title="Create new account"
+              >
+                + New
+              </button>
+            </div>
+
+            <p className="mt-2 text-[10px] text-slate-400 font-medium">
+              Active: <span className="font-black text-slate-600">{activeName}</span>
+            </p>
+          </div>
         </div>
 
         <div className="flex-1 space-y-2">
@@ -34,8 +89,8 @@ const Navigation: React.FC<NavProps> = ({ activeTab, setActiveTab }) => {
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all font-semibold text-sm ${
-                activeTab === tab.id 
-                  ? 'bg-mcgill-red text-white shadow-xl shadow-red-100' 
+                activeTab === tab.id
+                  ? 'bg-mcgill-red text-white shadow-xl shadow-red-100'
                   : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
               }`}
             >
@@ -47,7 +102,9 @@ const Navigation: React.FC<NavProps> = ({ activeTab, setActiveTab }) => {
 
         <div className="pt-8 border-t border-slate-50">
           <div className="bg-slate-50 p-5 rounded-2xl">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Campus Status</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">
+              Campus Status
+            </p>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
               <p className="text-xs font-medium text-slate-600">Active community today</p>
@@ -67,7 +124,9 @@ const Navigation: React.FC<NavProps> = ({ activeTab, setActiveTab }) => {
             }`}
           >
             <span className="text-xl">{tab.icon}</span>
-            <span className="text-[10px] font-bold uppercase tracking-wider">{tab.label.split(' ')[0]}</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider">
+              {tab.label.split(' ')[0]}
+            </span>
           </button>
         ))}
       </nav>

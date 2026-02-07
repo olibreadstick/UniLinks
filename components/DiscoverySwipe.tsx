@@ -26,8 +26,8 @@ const MOCK_DATA: DiscoveryItem[] = [
   {
     id: '1',
     type: DiscoveryType.EVENT,
-    title: 'McGill Engine Hack',
-    description: 'An innovation sprint hosted at the McConnell Engineering building.',
+    title: 'Hack McWICS 2026',
+    description: 'Come apply your coding skills!',
     image: 'https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&q=80&w=800',
     tags: ['Tech', 'Hackathon'],
   },
@@ -50,10 +50,18 @@ const MOCK_DATA: DiscoveryItem[] = [
   {
     id: 'n2',
     type: DiscoveryType.NETWORKING,
-    title: 'Morgan Stanley',
-    description: 'Global Financial Services firm with a deep footprint in Montreal. Learn about our tech stack.',
-    image: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&q=80&w=800',
-    tags: ['Networking', 'Finance', 'Full-time'],
+    title: 'CIBC',
+    description: 'Connect with CIBC professionals in technology, finance, and analytics roles.',
+    image: 'https://images.unsplash.com/photo-1554224154-22dec7ec8818?auto=format&fit=crop&q=80&w=800',
+    tags: ['Networking', 'Finance', 'Internship'],
+  },
+  {
+    id: 'n3',
+    type: DiscoveryType.NETWORKING,
+    title: 'Bombardier',
+    description: 'Explore engineering and aerospace career opportunities with Bombardier.',
+    image: 'https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&q=80&w=800',
+    tags: ['Networking', 'Engineering', 'Full-time'],
   },
   {
     id: '3',
@@ -62,8 +70,17 @@ const MOCK_DATA: DiscoveryItem[] = [
     description: 'Help us write the stories that shape our campus culture.',
     image: 'https://images.unsplash.com/photo-1504711434969-e33886168f5c?auto=format&fit=crop&q=80&w=800',
     tags: ['Journalism', 'Arts'],
-  }
-];
+  },
+  {
+    id: 'n4',
+    type: DiscoveryType.NETWORKING,
+    title: 'Matrox',
+    description: 'Montreal-based tech company specializing in video, graphics, and embedded systems. Hiring software and hardware interns.',
+    image: 'https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&q=80&w=800',
+    tags: ['Networking', 'Software', 'Hardware', 'Internship'],
+  },
+  ];
+
 
 interface DiscoverySwipeProps {
   onHeart?: (item: DiscoveryItem) => void;
@@ -117,8 +134,8 @@ const DiscoverySwipe: React.FC<DiscoverySwipeProps> = ({ onHeart, externalItems 
   };
 
   return (
-    <div className="relative w-full min-h-screen flex flex-col items-center justify-start py-6 overflow-hidden bg-gradient-to-br from-[#6A0B17] via-[#B5122A] to-[#ED1B2F]">
-      <div className="w-full mb-8 px-4 overflow-x-auto">
+    <div className="relative w-full min-h-screen flex flex-col items-center justify-start py-6 overflow-hidden bg-transparent">
+    <div className="w-full mb-8 px-4 overflow-x-auto">
         <div className="flex gap-4 min-w-max pb-2">
           {CATEGORIES.map(cat => (
             <button
