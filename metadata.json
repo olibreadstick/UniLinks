@@ -1,0 +1,8 @@
+{
+  "name": "UniConnex",
+  "description": "A vibrant student networking platform featuring AI-powered social coaching, swiping discovery for events and partners, and intelligent campus recommendations.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
