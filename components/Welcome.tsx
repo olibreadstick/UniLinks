@@ -1,5 +1,4 @@
-
-import React from 'react';
+import React from "react";
 
 interface WelcomeProps {
   onStart: () => void;
@@ -7,44 +6,112 @@ interface WelcomeProps {
 
 const Welcome: React.FC<WelcomeProps> = ({ onStart }) => {
   return (
-    <div className="fixed inset-0 z-[100] bg-white flex flex-col items-center justify-center text-center px-6 overflow-hidden">
-      {/* Background Decorative Elements */}
-      <div className="absolute top-[-10%] right-[-10%] w-[50%] aspect-square bg-red-50 rounded-full blur-3xl opacity-50" />
-      <div className="absolute bottom-[-5%] left-[-5%] w-[40%] aspect-square bg-slate-50 rounded-full blur-3xl opacity-50" />
-      
-      <div className="relative z-10 max-w-2xl">
-        <div className="w-20 h-20 bg-mcgill-red rounded-3xl flex items-center justify-center shadow-2xl shadow-red-200 mx-auto mb-10 rotate-3 transform hover:rotate-0 transition-transform duration-500">
-          <span className="text-white text-4xl font-black">U</span>
-        </div>
-        
-        <h1 className="text-6xl lg:text-7xl font-black text-slate-900 tracking-tighter mb-6 leading-tight">
-          Your McGill <br /> 
-          <span className="text-mcgill-red">Connection</span> Starts Here.
-        </h1>
-        
-        <p className="text-xl text-slate-500 mb-12 max-w-lg mx-auto leading-relaxed">
-          The all-in-one platform for McGillians to find partners, build communities, and master social confidence.
-        </p>
+    <div className="fixed inset-0 z-[100] overflow-hidden">
+      {/* ================= BACKGROUND ================= */}
+      <div className="absolute inset-0 bg-gradient-to-br from-[#4F0710] via-[#A90F24] to-[#ED1B2F]" />
+      <div className="absolute inset-0 bg-gradient-to-b from-black/20 via-black/10 to-black/30" />
 
-        <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-          <button 
-            onClick={onStart}
-            className="w-full sm:w-auto px-12 py-5 bg-mcgill-red text-white font-black text-xl rounded-full shadow-2xl shadow-red-200 hover:bg-red-600 hover:scale-105 active:scale-95 transition-all duration-300"
-          >
-            Enter UniConnex
-          </button>
-          <div className="text-slate-400 text-xs font-bold uppercase tracking-[0.2em]">
-            Grand Descente 2024
+      {/* Ambient glow */}
+      <div className="absolute -top-[28rem] -right-[28rem] w-[110rem] h-[110rem] bg-white/10 rounded-full blur-3xl" />
+      <div className="absolute -bottom-[28rem] -left-[28rem] w-[110rem] h-[110rem] bg-black/30 rounded-full blur-3xl" />
+
+      {/* Dot texture */}
+      <div className="absolute inset-0 opacity-[0.06] bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.9)_1px,transparent_0)] [background-size:32px_32px]" />
+
+      {/* ================= CONTENT ================= */}
+      <div className="relative z-10 h-full w-full px-24 py-16 flex flex-col">
+        {/* ================= TOP BRAND ================= */}
+        <div className="flex flex-col items-center text-center">
+          <div className="flex items-center gap-16">
+            {/* Logo */}
+            <div className="w-44 h-44 rounded-[4rem] bg-white/15 border border-white/30 backdrop-blur flex items-center justify-center shadow-2xl">
+              <span className="text-white text-[8rem] font-black leading-none">
+                U
+              </span>
+            </div>
+
+            <div>
+              <h1 className="text-white text-[9rem] leading-none font-black tracking-tight">
+                UniLinks
+              </h1>
+              <div className="mt-6 text-white/85 text-2xl font-black uppercase tracking-[0.6em]">
+                Connect • Community • Friendship
+              </div>
+            </div>
+          </div>
+
+          {/* McGill badge */}
+          <div className="mt-14 inline-flex items-center gap-8 px-20 py-8 rounded-full bg-white/12 border border-white/25 backdrop-blur">
+            <div className="w-18 h-18 rounded-full bg-white/15 border border-white/30 flex items-center justify-center">
+              <svg width="36" height="36" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M12 2l8 3v7c0 6-4 9-8 10-4-1-8-4-8-10V5l8-3z"
+                  stroke="rgba(255,255,255,0.95)"
+                  strokeWidth="2"
+                />
+                <path
+                  d="M8.2 11.2l1.6 1.6 3.8-3.8"
+                  stroke="rgba(255,255,255,0.95)"
+                  strokeWidth="2"
+                />
+              </svg>
+            </div>
+
+            <div className="text-left">
+              <div className="text-white text-5xl font-black">
+                McGill University
+              </div>
+              <div className="mt-1 text-white/80 text-xl font-bold uppercase tracking-[0.35em]">
+                Campus Community
+              </div>
+            </div>
           </div>
         </div>
-      </div>
 
-      <div className="absolute bottom-12 flex gap-8 text-slate-300 font-bold text-[10px] uppercase tracking-widest">
-        <span>SSMU Verified</span>
-        <span>•</span>
-        <span>Peer-to-Peer</span>
-        <span>•</span>
-        <span>AI Assisted</span>
+        {/* ================= MAIN SECTION ================= */}
+        <div className="flex-1 flex items-center">
+          <div className="w-full max-w-[1700px] mx-auto grid grid-cols-[1.35fr_0.65fr] gap-32 items-center">
+            {/* LEFT — TEXT */}
+            <div className="-ml-6">
+              <h2 className="text-white text-[6.2rem] leading-[1.05] font-black max-w-[56rem]">
+                Make friends at McGill —{" "}
+                <span className="text-white/90">starting today.</span>
+              </h2>
+
+              <div className="mt-12 max-w-[46rem]">
+                <p className="text-white/95 text-3xl leading-relaxed">
+                  Find <span className="font-black">lab partners</span>,{" "}
+                  <span className="font-black">group members</span>,{" "}
+                  <span className="font-black">competition teammates</span>, and
+                  new <span className="font-black">friends</span> — through
+                  shared classes, interests, and campus life.
+                </p>
+              </div>
+            </div>
+
+            {/* RIGHT — BUTTONS */}
+            <div className="flex flex-col items-center gap-12 justify-self-end">
+              <button
+                onClick={onStart}
+                className="w-[36rem] py-14 rounded-[3.5rem] bg-white text-[#5A0812] font-black text-5xl shadow-2xl hover:scale-[1.05] active:scale-[0.97] transition"
+              >
+                Let&apos;s Get Started
+              </button>
+
+              <button
+                onClick={onStart}
+                className="w-[36rem] py-14 rounded-[3.5rem] bg-white/10 border-2 border-white/35 text-white font-black text-5xl backdrop-blur hover:bg-white/15 hover:scale-[1.05] active:scale-[0.97] transition"
+              >
+                Complete Profile
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* ================= FOOTER ================= */}
+        <div className="text-center text-white/70 text-sm font-bold uppercase tracking-[0.45em]">
+          UniLinks • McGill Community
+        </div>
       </div>
     </div>
   );
