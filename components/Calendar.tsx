@@ -323,14 +323,15 @@ const Calendar: React.FC<CalendarProps> = ({
                 </div>
               )}
 
-              {eventTypesOnSelectedDate.length === 0 && (
-                <div className="text-center py-6">
-                  <span className="text-3xl mb-2 block">📭</span>
-                  <p className="text-slate-500">
-                    No events on this date. Check other dates!
-                  </p>
-                </div>
-              )}
+              {savedEventsOnSelectedDate.length === 0 &&
+                allEventsOnSelectedDate.length === 0 && (
+                  <div className="text-center py-6">
+                    <span className="text-3xl mb-2 block">📭</span>
+                    <p className="text-slate-500">
+                      No events on this date. Check other dates!
+                    </p>
+                  </div>
+                )}
             </div>
           </div>
         </div>

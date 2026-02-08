@@ -130,7 +130,6 @@ const App: React.FC = () => {
   const [eventDate, setEventDate] = useState(""); // YYYY-MM-DD
   const [eventTime, setEventTime] = useState(""); // HH:MM
 
-  const [recs, setRecs] = useState<{ title: string; reason: string }[]>([]);
   const [hasPersonalKey, setHasPersonalKey] = useState(false);
 
   useEffect(() => {
@@ -251,19 +250,6 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem(GLOBAL_COLLABS_KEY, JSON.stringify(collabRequests));
   }, [collabRequests]);
-
-  useEffect(() => {
-    if (!userProfile) return;
-    const fetchRecs = async () => {
-      if (userProfile.interests.length > 0) {
-        const suggestions = await generateRecommendations(
-          userProfile.interests,
-        );
-        setRecs(suggestions);
-      }
-    };
-    if (activeTab === "community" && onboardingComplete) fetchRecs();
-  }, [activeTab, onboardingComplete, userProfile]);
 
   const handleOnboardingComplete = (interests: string[], major: string) => {
     setUserProfile((prev) => (prev ? { ...prev, interests, major } : prev));
@@ -436,108 +422,6 @@ const App: React.FC = () => {
         );
       case "coach":
         return <AICoach heartedItems={heartedItems} />;
-      case "community":
-        return (
-          <div className="p-6 lg:p-12 pb-32 animate-in fade-in duration-500 max-w-6xl mx-auto">
-            <header className="mb-12">
-              <span className="text-xs font-bold text-mcgill-red uppercase tracking-[0.3em] mb-2 block">
-                Your Hub
-              </span>
-              <h2 className="text-4xl lg:text-5xl font-black text-slate-900 tracking-tight">
-                McGill Communities
-              </h2>
-            </header>
-
-            <div className="bg-mcgill-red rounded-[3rem] p-10 lg:p-16 text-white relative overflow-hidden shadow-2xl shadow-red-100">
-              <div className="relative z-10 grid lg:grid-cols-2 gap-12 items-center">
-                <div>
-                  <h3 className="text-3xl lg:text-5xl font-black mb-6 leading-[1.1]">
-                    Personalized suggestions for {userProfile.major} students.
-                  </h3>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-16">
-                  {[
-                    {
-                      name: "SSMU Club Fair",
-                      type: "Event",
-                      date: "Sept 14",
-                      color: "bg-indigo-500",
-                    },
-                    {
-                      name: "McGill Outdoors Club",
-                      type: "Community",
-                      date: "Active Now",
-                      color: "bg-emerald-500",
-                    },
-                    {
-                      name: "Gerts Student Bar",
-                      type: "Venue",
-                      date: "Open 4pm",
-                      color: "bg-amber-500",
-                    },
-                    {
-                      name: "Desautels Networking",
-                      type: "Career",
-                      date: "Oct 02",
-                      color: "bg-rose-500",
-                    },
-                    {
-                      name: "Redpath Study Group",
-                      type: "Academic",
-                      date: "Ongoing",
-                      color: "bg-sky-500",
-                    },
-                    {
-                      name: "Daily Martlet Fans",
-                      type: "Athletics",
-                      date: "Saturday",
-                      color: "bg-mcgill-red",
-                    },
-                  ].map((item) => (
-                    <div
-                      key={item.name}
-                      className="group bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-50 hover:shadow-xl hover:shadow-slate-100 transition-all cursor-pointer"
-                    >
-                      <div
-                        className={`w-14 h-14 rounded-2xl flex items-center justify-center text-white font-black text-xl mb-6 shadow-lg ${item.color}`}
-                      >
-                        {item.name[0]}
-                      </div>
-                      <h4 className="text-xl font-bold text-slate-900 mb-1">
-                        {item.name}
-                      </h4>
-                      <div className="flex items-center justify-between">
-                        <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">
-                          {item.type}
-                        </p>
-                        <span className="text-[10px] font-black text-mcgill-red bg-red-50 px-2 py-1 rounded-full">
-                          {item.date}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="space-y-4">
-                  {recs.map((rec, i) => (
-                    <div
-                      key={i}
-                      className="bg-white p-6 rounded-[2rem] border border-white/10 shadow-lg"
-                    >
-                      <h4 className="font-bold text-slate-900 text-lg mb-2">
-                        {rec.title}
-                      </h4>
-                      <p className="text-sm text-slate-500 leading-relaxed font-medium">
-                        {rec.reason}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        );
 
       case "calendar":
         return (
