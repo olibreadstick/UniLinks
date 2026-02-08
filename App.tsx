@@ -7,11 +7,10 @@ import Welcome from "./components/Welcome";
 import { generateRecommendations } from "./services/gemini";
 import { DiscoveryItem, DiscoveryType, CollabRequest } from "./types";
 import type { UserProfile } from "./types";
-
+import McGillCourses from "./components/McGillCourses";
 
 const ACCOUNTS_KEY = "uc_accounts";
 const ACTIVE_ACCOUNT_KEY = "uc_active_account";
-const savedAccounts = localStorage.getItem(ACCOUNTS_KEY);
 const GLOBAL_COLLABS_KEY = "uc_global_collabs";
 
 
@@ -61,24 +60,19 @@ const CREATE_TYPES = [
   { id: DiscoveryType.EVENT, label: "Event" },
   { id: DiscoveryType.CLUB, label: "Club / Org" },
   { id: DiscoveryType.NETWORKING, label: "Networking" },
-  { id: DiscoveryType.PARTNER, label: "Study / Partner" }, // optional
-  // { id: DiscoveryType.COURSE, label: "Course" }, // only if you support this type in your enum
 ] as const;
 
 
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState("discover");
 
-  // ✅ Start on welcome every time page loads
-  const [showWelcome, setShowWelcome] = useState(true);
 
+  const [showWelcome, setShowWelcome] = useState(true);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
 
-  // Accounts
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [activeAccountId, setActiveAccountId] = useState<string | null>(null);
 
-  // Profile (loaded per account)
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
 
@@ -125,31 +119,33 @@ const MAX_AVATAR_BYTES = 5_000_000;
     }
   };
 
-  // Discovery & Hearting State
   const [heartedItems, setHeartedItems] = useState<DiscoveryItem[]>([]);
   const [collabRequests, setCollabRequests] = useState<CollabRequest[]>([]);
   const [isCollabModalOpen, setIsCollabModalOpen] = useState(false);
 
-  // Form state for new request
   const [newReqTitle, setNewReqTitle] = useState("");
   const [newReqGoal, setNewReqGoal] = useState(COLLAB_GOALS[0]);
   const [newReqSize, setNewReqSize] = useState(2);
 
+  const [newReqDescription, setNewReqDescription] = useState("");
+
+  //olivia
+  const [eventDate, setEventDate] = useState(""); // YYYY-MM-DD
+  const [eventTime, setEventTime] = useState(""); // HH:MM
+
+
   const [recs, setRecs] = useState<{ title: string; reason: string }[]>([]);
   const [hasPersonalKey, setHasPersonalKey] = useState(false);
 
-  // Load accounts
   useEffect(() => {
     const c = localStorage.getItem(GLOBAL_COLLABS_KEY);
     setCollabRequests(c ? JSON.parse(c) : []);
+
     const savedAccounts = localStorage.getItem(ACCOUNTS_KEY);
     const savedActive = localStorage.getItem(ACTIVE_ACCOUNT_KEY);
 
-    const parsedAccounts: Account[] = savedAccounts
-      ? JSON.parse(savedAccounts)
-      : [];
+    const parsedAccounts: Account[] = savedAccounts ? JSON.parse(savedAccounts) : [];
 
-    // First time: create default account
     if (parsedAccounts.length === 0) {
       const id = makeAccountId();
       const defaultAcc: Account = {
@@ -175,7 +171,6 @@ const MAX_AVATAR_BYTES = 5_000_000;
     localStorage.setItem(ACTIVE_ACCOUNT_KEY, activeId);
   }, []);
 
-  // Load profile/hearts/collabs for active account
   useEffect(() => {
     if (!activeAccountId) return;
 
@@ -186,9 +181,7 @@ const MAX_AVATAR_BYTES = 5_000_000;
     if (p) {
       setUserProfile(JSON.parse(p));
       setOnboardingComplete(true);
-      // ✅ DO NOT auto-close welcome here
     } else {
-      // No profile yet => start onboarding for this account
       setUserProfile({
         id: activeAccountId,
         name: "New User",
@@ -201,7 +194,6 @@ const MAX_AVATAR_BYTES = 5_000_000;
         experience: ["Research Assistant @ McGill", "Intern @ Shopify"],
       });
       setOnboardingComplete(false);
-      // ✅ DO NOT auto-close welcome here
     }
 
     setHeartedItems(h ? JSON.parse(h) : []);
@@ -226,7 +218,6 @@ const MAX_AVATAR_BYTES = 5_000_000;
 
   useEffect(() => {
   if (!userProfile || !activeAccountId) return;
-
   if (userProfile.id !== activeAccountId) return;
 
   setAccounts(prev => {
@@ -249,25 +240,21 @@ const MAX_AVATAR_BYTES = 5_000_000;
 
 
 
-  // Persist profile
   useEffect(() => {
     if (!activeAccountId || !userProfile) return;
     localStorage.setItem(profileKey(activeAccountId), JSON.stringify(userProfile));
   }, [activeAccountId, userProfile]);
 
-  // Persist hearts
   useEffect(() => {
     if (!activeAccountId) return;
     localStorage.setItem(heartsKey(activeAccountId), JSON.stringify(heartedItems));
   }, [activeAccountId, heartedItems]);
 
-  // Persist collabs
   useEffect(() => {
   localStorage.setItem(GLOBAL_COLLABS_KEY, JSON.stringify(collabRequests));
 }, [collabRequests]);
 
 
-  // Fetch recs
   useEffect(() => {
     if (!userProfile) return;
     const fetchRecs = async () => {
@@ -290,31 +277,54 @@ const MAX_AVATAR_BYTES = 5_000_000;
     }
   };
 
+
+  {/* olivia */}
   const submitRequest = () => {
-  if (!userProfile) return;
+    if (!userProfile) return;
 
-  const title =
-    newReqTitle ||
-    (newReqType === DiscoveryType.COLLAB_REQUEST ? newReqGoal : "New Broadcast");
+    const isEvent = newReqType === DiscoveryType.EVENT;
+    const isCollab = newReqType === DiscoveryType.COLLAB_REQUEST;
 
-  const newItem: CollabRequest = {
-    id: `req_${Date.now()}`,
-    type: newReqType,
-    title,
-    description: `Posted by ${userProfile.name}.`,
-    tags: [userProfile.major, "Collaboration"],
-    creatorId: userProfile.id,
-    targetGroupSize: newReqType === DiscoveryType.COLLAB_REQUEST ? newReqSize : undefined,
-    participants: [],
-    image: defaultImageFor(newReqType), // ✅ make sure your type supports this field (see note below)
+    const title =
+      newReqTitle ||
+      (isCollab ? newReqGoal : isEvent ? "New Event" : "New Broadcast");
+
+    const description = isEvent
+      ? (newReqDescription?.trim() || `Event posted by ${userProfile.name}.`)
+      : isCollab
+        ? `Project request by ${userProfile.name}. Target team size: ${newReqSize}.`
+        : `Posted by ${userProfile.name}.`;
+
+        {/* olivia */}
+    const newItem: CollabRequest = {
+      id: `req_${Date.now()}`,
+      type: newReqType,
+      title,
+      description,
+      tags: [userProfile.major, "Collaboration"],
+      creatorId: userProfile.id,
+      creatorName: userProfile.name,
+      creatorAvatar: userProfile.avatar || "",
+      participants: [],
+      image: defaultImageFor(newReqType),
+
+      targetGroupSize: isCollab ? newReqSize : undefined,
+
+      eventDate: isEvent ? eventDate : undefined,
+      eventTime: isEvent ? eventTime : undefined,
+    };
+
+    setCollabRequests((prev) => [newItem, ...prev]);
+
+    // reset modal state
+    setIsCollabModalOpen(false);
+    setNewReqTitle("");
+    setNewReqDescription("");
+    setEventDate("");
+    setEventTime("");
+    setNewReqType(DiscoveryType.COLLAB_REQUEST);
+    setActiveTab("discover");
   };
-
-  setCollabRequests((prev) => [newItem, ...prev]); // prepend feels better
-  setIsCollabModalOpen(false);
-  setNewReqTitle("");
-  setNewReqType(DiscoveryType.COLLAB_REQUEST);
-  setActiveTab("discover");
-};
 
 
   const onToggleInterested = (requestId: string) => {
@@ -335,12 +345,10 @@ const MAX_AVATAR_BYTES = 5_000_000;
         };
       });
 
-      // IMPORTANT: persist immediately so other accounts/tabs can see it
       localStorage.setItem(GLOBAL_COLLABS_KEY, JSON.stringify(next));
       return next;
     });
   };
-
 
   const toggleArrayItem = (
     field: "skills" | "experience",
@@ -356,16 +364,12 @@ const MAX_AVATAR_BYTES = 5_000_000;
   };
 
   const addArrayItem = (field: "skills" | "experience") => {
-    setUserProfile((prev) =>
-      prev ? { ...prev, [field]: [...prev[field], ""] } : prev
-    );
+    setUserProfile((prev) => (prev ? { ...prev, [field]: [...prev[field], ""] } : prev));
   };
 
   const removeArrayItem = (field: "skills" | "experience", index: number) => {
     setUserProfile((prev) =>
-      prev
-        ? { ...prev, [field]: prev[field].filter((_, i) => i !== index) }
-        : prev
+      prev ? { ...prev, [field]: prev[field].filter((_, i) => i !== index) } : prev,
     );
   };
 
@@ -376,7 +380,15 @@ const MAX_AVATAR_BYTES = 5_000_000;
     }
   };
 
-  // ✅ Always show Welcome first until user clicks start
+  {/* Olivia */}
+  const needsDetails =
+    newReqType === DiscoveryType.EVENT ||
+    newReqType === DiscoveryType.NETWORKING ||
+    newReqType === DiscoveryType.CLUB;
+
+
+
+
   if (showWelcome) {
     return (
       <Welcome
@@ -455,9 +467,7 @@ const MAX_AVATAR_BYTES = 5_000_000;
                       >
                         {item.name[0]}
                       </div>
-                      <h4 className="text-xl font-bold text-slate-900 mb-1">
-                        {item.name}
-                      </h4>
+                      <h4 className="text-xl font-bold text-slate-900 mb-1">{item.name}</h4>
                       <div className="flex items-center justify-between">
                         <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">
                           {item.type}
@@ -476,12 +486,8 @@ const MAX_AVATAR_BYTES = 5_000_000;
                       key={i}
                       className="bg-white p-6 rounded-[2rem] border border-white/10 shadow-lg"
                     >
-                      <h4 className="font-bold text-slate-900 text-lg mb-2">
-                        {rec.title}
-                      </h4>
-                      <p className="text-sm text-slate-500 leading-relaxed font-medium">
-                        {rec.reason}
-                      </p>
+                      <h4 className="font-bold text-slate-900 text-lg mb-2">{rec.title}</h4>
+                      <p className="text-sm text-slate-500 leading-relaxed font-medium">{rec.reason}</p>
                     </div>
                   ))}
                 </div>
@@ -490,11 +496,33 @@ const MAX_AVATAR_BYTES = 5_000_000;
           </div>
         );
 
+      case "calendar":
+        return (
+          <div className="p-6 lg:p-12 pb-32 animate-in fade-in duration-500">
+            <header className="mb-12 max-w-6xl mx-auto">
+              <span className="text-xs font-bold text-white uppercase tracking-[0.3em] mb-2 block">
+                Your Schedule
+              </span>
+              <h2 className="text-4xl lg:text-5xl font-black text-white tracking-tight">
+                Event Calendar
+              </h2>
+            </header>
+            <Calendar savedItems={heartedItems} allItems={collabRequests} onSaveItem={handleHeart} />
+          </div>
+        );
+
+      case "courses":
+        return (
+          <McGillCourses
+            userProfile={userProfile} // #mariam
+            activeAccountId={activeAccountId!} // #mariam
+          />
+        ); // #mariam
+
       case "profile":
         return (
           <div className="p-8 lg:p-16 pb-32 max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="grid lg:grid-cols-3 gap-12">
-              {/* Profile Card */}
               <div className="bg-white rounded-[3.5rem] shadow-xl shadow-slate-100/50 p-10 border border-slate-50 text-center flex flex-col items-center h-fit sticky top-12">
                 <div className="mb-8 relative">
                   <div className="w-32 h-32 rounded-full border-[6px] border-slate-50 shadow-2xl overflow-hidden bg-slate-100">
@@ -514,55 +542,52 @@ const MAX_AVATAR_BYTES = 5_000_000;
                 </div>
 
                 {isEditingProfile ? (
-                    <div className="w-full space-y-4">
-                      {/* Name */}
-                      <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase text-left mb-1 ml-2">
-                          Name
-                        </label>
-                        <input
-                          value={userProfile.name}
-                          onChange={(e) => setUserProfile({ ...userProfile, name: e.target.value })}
-                          className="w-full p-3 bg-slate-50 rounded-xl font-bold"
-                        />
-                      </div>
+                  <div className="w-full space-y-4">
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase text-left mb-1 ml-2">
+                        Name
+                      </label>
+                      <input
+                        value={userProfile.name}
+                        onChange={(e) => setUserProfile({ ...userProfile, name: e.target.value })}
+                        className="w-full p-3 bg-slate-50 rounded-xl font-bold"
+                      />
+                    </div>
 
-                      {/* GPA */}
-                      <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase text-left mb-1 ml-2">
-                          GPA
-                        </label>
-                        <input
-                          value={userProfile.gpa}
-                          onChange={(e) => setUserProfile({ ...userProfile, gpa: e.target.value })}
-                          className="w-full p-3 bg-slate-50 rounded-xl font-bold"
-                          placeholder="e.g. 4.0"
-                        />
-                      </div>
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase text-left mb-1 ml-2">
+                        GPA
+                      </label>
+                      <input
+                        value={userProfile.gpa}
+                        onChange={(e) => setUserProfile({ ...userProfile, gpa: e.target.value })}
+                        className="w-full p-3 bg-slate-50 rounded-xl font-bold"
+                        placeholder="e.g. 4.0"
+                      />
+                    </div>
 
-                      {/* Profile picture */}
-                      <div>
-                        <label className="block text-[10px] font-black text-slate-400 uppercase text-left mb-1 ml-2">
-                          Profile picture
-                        </label>
+                    <div>
+                      <label className="block text-[10px] font-black text-slate-400 uppercase text-left mb-1 ml-2">
+                        Profile picture
+                      </label>
 
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) => handleAvatarFile(e.target.files?.[0] ?? null)}
-                          className="w-full p-3 bg-slate-50 rounded-xl font-bold"
-                        />
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => handleAvatarFile(e.target.files?.[0] ?? null)}
+                        className="w-full p-3 bg-slate-50 rounded-xl font-bold"
+                      />
 
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setUserProfile((prev) => (prev ? { ...prev, avatar: "" } : prev))
-                          }
-                          className="w-full mt-3 py-3 bg-white border border-slate-200 rounded-xl text-[9px] font-black text-slate-400 hover:text-mcgill-red hover:border-mcgill-red transition-all uppercase"
-                        >
-                          Remove photo
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setUserProfile((prev) => (prev ? { ...prev, avatar: "" } : prev))
+                        }
+                        className="w-full mt-3 py-3 bg-white border border-slate-200 rounded-xl text-[9px] font-black text-slate-400 hover:text-mcgill-red hover:border-mcgill-red transition-all uppercase"
+                      >
+                        Remove photo
+                      </button>
+                    </div>
 
                       <button
                         onClick={() => setIsEditingProfile(false)}
@@ -592,7 +617,6 @@ const MAX_AVATAR_BYTES = 5_000_000;
                     </>
                   )}
 
-                {/* API Health Check */}
                 <div className="mt-8 w-full p-5 bg-slate-50 rounded-3xl border border-slate-100">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
@@ -622,10 +646,7 @@ const MAX_AVATAR_BYTES = 5_000_000;
                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex justify-between items-center">
                       Experience
                       {isEditingProfile && (
-                        <button
-                          onClick={() => addArrayItem("experience")}
-                          className="text-mcgill-red font-black text-lg"
-                        >
+                        <button onClick={() => addArrayItem("experience")} className="text-mcgill-red font-black text-lg">
                           +
                         </button>
                       )}
@@ -636,9 +657,7 @@ const MAX_AVATAR_BYTES = 5_000_000;
                           {isEditingProfile ? (
                             <input
                               value={exp}
-                              onChange={(e) =>
-                                toggleArrayItem("experience", i, e.target.value)
-                              }
+                              onChange={(e) => toggleArrayItem("experience", i, e.target.value)}
                               className="flex-1 p-3 bg-slate-50 rounded-xl text-xs font-medium border border-slate-100"
                             />
                           ) : (
@@ -647,10 +666,7 @@ const MAX_AVATAR_BYTES = 5_000_000;
                             </div>
                           )}
                           {isEditingProfile && (
-                            <button
-                              onClick={() => removeArrayItem("experience", i)}
-                              className="text-slate-200 hover:text-red-500"
-                            >
+                            <button onClick={() => removeArrayItem("experience", i)} className="text-slate-200 hover:text-red-500">
                               ×
                             </button>
                           )}
@@ -663,10 +679,7 @@ const MAX_AVATAR_BYTES = 5_000_000;
                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex justify-between items-center">
                       Skills
                       {isEditingProfile && (
-                        <button
-                          onClick={() => addArrayItem("skills")}
-                          className="text-mcgill-red font-black text-lg"
-                        >
+                        <button onClick={() => addArrayItem("skills")} className="text-mcgill-red font-black text-lg">
                           +
                         </button>
                       )}
@@ -677,9 +690,7 @@ const MAX_AVATAR_BYTES = 5_000_000;
                           {isEditingProfile ? (
                             <input
                               value={skill}
-                              onChange={(e) =>
-                                toggleArrayItem("skills", i, e.target.value)
-                              }
+                              onChange={(e) => toggleArrayItem("skills", i, e.target.value)}
                               className="w-20 p-2 bg-slate-50 rounded-lg text-[9px] font-black"
                             />
                           ) : (
@@ -688,10 +699,7 @@ const MAX_AVATAR_BYTES = 5_000_000;
                             </span>
                           )}
                           {isEditingProfile && (
-                            <button
-                              onClick={() => removeArrayItem("skills", i)}
-                              className="text-slate-300"
-                            >
+                            <button onClick={() => removeArrayItem("skills", i)} className="text-slate-300">
                               ×
                             </button>
                           )}
@@ -702,14 +710,10 @@ const MAX_AVATAR_BYTES = 5_000_000;
                 </div>
               </div>
 
-              {/* Side Panels */}
               <div className="lg:col-span-2 space-y-8">
-                {/* Hearted Items */}
                 <div className="bg-white rounded-[3rem] p-10 shadow-sm border border-slate-50">
                   <h3 className="text-2xl font-black text-slate-900 mb-8 flex items-center gap-4">
-                    <span className="bg-mcgill-red text-white p-2 rounded-xl text-lg">
-                      ❤️
-                    </span>
+                    <span className="bg-mcgill-red text-white p-2 rounded-xl text-lg">❤️</span>
                     Saved & Hearted
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -723,14 +727,12 @@ const MAX_AVATAR_BYTES = 5_000_000;
                             <span className="text-[9px] font-black text-mcgill-red uppercase tracking-widest mb-1 block">
                               {item.type}
                             </span>
-                            <h5 className="font-bold text-slate-900">
-                              {item.title}
-                            </h5>
+                            <h5 className="font-bold text-slate-900">{item.title}</h5>
                           </div>
                           <button
                             onClick={() =>
                               setHeartedItems((prev) =>
-                                prev.filter((h) => h.id !== item.id)
+                                prev.filter((h) => h.id !== item.id),
                               )
                             }
                             className="mt-4 text-[10px] font-bold text-slate-400 hover:text-red-500 transition-colors uppercase tracking-widest"
@@ -747,18 +749,14 @@ const MAX_AVATAR_BYTES = 5_000_000;
                   </div>
                 </div>
 
-                {/* My Broadcasts */}
                 <div className="bg-white rounded-[3rem] p-10 shadow-sm border border-slate-50">
                   <h3 className="text-2xl font-black text-slate-900 mb-8 flex items-center gap-4">
-                    <span className="bg-indigo-600 text-white p-2 rounded-xl text-lg">
-                      📡
-                    </span>
+                    <span className="bg-indigo-600 text-white p-2 rounded-xl text-lg">📡</span>
                     Your Campus Broadcasts
                   </h3>
 
                   <div className="space-y-4">
-                    {collabRequests.filter((r) => r.creatorId === userProfile.id)
-                      .length > 0 ? (
+                    {collabRequests.filter((r) => r.creatorId === userProfile.id).length > 0 ? (
                       collabRequests
                         .filter((r) => r.creatorId === userProfile.id)
                         .map((req) => (
@@ -770,10 +768,13 @@ const MAX_AVATAR_BYTES = 5_000_000;
                               <h5 className="font-bold text-slate-900 text-lg mb-1">
                                 {req.title}
                               </h5>
+                              <p className="text-xs text-slate-500 font-bold">
+                                By {req.creatorName ?? "Unknown"}
+                              </p>
+
                               <div className="flex items-center gap-4">
                                 <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">
-                                  {req.participants.length} /{" "}
-                                  {req.targetGroupSize} Interested
+                                  {req.participants.length} / {req.targetGroupSize} Interested
                                 </p>
                                 {req.participants.length > 0 && (
                                   <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
@@ -781,19 +782,10 @@ const MAX_AVATAR_BYTES = 5_000_000;
                               </div>
                             </div>
                             <button
-                              onClick={() =>
-                                setCollabRequests((prev) =>
-                                  prev.filter((r) => r.id !== req.id)
-                                )
-                              }
+                              onClick={() => setCollabRequests((prev) => prev.filter((r) => r.id !== req.id))}
                               className="text-slate-300 hover:text-red-500 transition-colors"
                             >
-                              <svg
-                                className="w-6 h-6"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
+                              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path
                                   strokeLinecap="round"
                                   strokeLinejoin="round"
@@ -846,17 +838,11 @@ const MAX_AVATAR_BYTES = 5_000_000;
           setActiveAccountId(id);
           localStorage.setItem(ACTIVE_ACCOUNT_KEY, id);
           setActiveTab("discover");
-          // ✅ optional: show welcome again when switching accounts
           setShowWelcome(true);
         }}
         onCreateAccount={() => {
           const id = makeAccountId();
-          const newAcc = {
-            id,
-            name: "New User",
-            createdAt: Date.now(),
-          };
-
+          const newAcc = { id, name: "New User", createdAt: Date.now() };
           const next = [newAcc, ...accounts];
 
           setAccounts(next);
@@ -865,7 +851,6 @@ const MAX_AVATAR_BYTES = 5_000_000;
           setActiveAccountId(id);
           localStorage.setItem(ACTIVE_ACCOUNT_KEY, id);
 
-          // ✅ NEW ACCOUNT -> start at welcome
           setShowWelcome(true);
           setOnboardingComplete(false);
           setActiveTab("discover");
@@ -875,7 +860,6 @@ const MAX_AVATAR_BYTES = 5_000_000;
       <main className="flex-1 min-h-screen lg:ml-0 overflow-y-auto relative bg-transparent">
         {renderContent()}
 
-        {/* Floating Action Button */}
         <button
           onClick={() => setIsCollabModalOpen(true)}
           className="fixed bottom-8 right-8 w-16 h-16 bg-mcgill-red text-white rounded-full shadow-[0_20px_50px_rgba(237,27,47,0.3)] flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-40 group"
@@ -886,22 +870,18 @@ const MAX_AVATAR_BYTES = 5_000_000;
             stroke="currentColor"
             viewBox="0 0 24 24"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="3"
-              d="M12 4v16m8-8H4"
-            ></path>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 4v16m8-8H4"></path>
           </svg>
           <span className="absolute right-24 bg-slate-900 text-white px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-xl">
             New Broadcast
           </span>
         </button>
 
-        {/* Create Collab Modal */}
         {isCollabModalOpen && (
           <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[110] flex items-center justify-center p-6">
             <div className="bg-white w-full max-w-xl rounded-[4rem] p-12 lg:p-16 shadow-2xl animate-in fade-in zoom-in-95 duration-300">
+              {/* ... your existing modal code stays the same ... */}
+              {/* (No changes needed for the swipe-avatar feature) */}
               <div className="flex justify-between items-center mb-10">
                 <div>
                   <span className="text-xs font-black text-mcgill-red uppercase tracking-widest mb-1 block">
@@ -915,18 +895,8 @@ const MAX_AVATAR_BYTES = 5_000_000;
                   onClick={() => setIsCollabModalOpen(false)}
                   className="text-slate-200 hover:text-slate-900 transition-colors"
                 >
-                  <svg
-                    className="w-10 h-10"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2.5"
-                      d="M6 18L18 6M6 6l12 12"
-                    ></path>
+                  <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"></path>
                   </svg>
                 </button>
               </div>
@@ -956,40 +926,107 @@ const MAX_AVATAR_BYTES = 5_000_000;
 
 
 
-              <div className="space-y-8">
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
-                    What's the goal?
-                  </label>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {COLLAB_GOALS.map((g) => (
-                      <button
-                        key={g}
-                        onClick={() => setNewReqGoal(g)}
-                        className={`p-4 rounded-2xl text-left text-[10px] font-black transition-all border-2 ${
-                          newReqGoal === g
-                            ? "border-mcgill-red bg-red-50 text-mcgill-red shadow-md"
-                            : "border-slate-50 bg-slate-50 text-slate-500 hover:border-slate-100"
-                        }`}
-                      >
-                        {g}
-                      </button>
-                    ))}
-                  </div>
-                </div>
+              {/* olivia */}
 
+              {/* Broadcast Name (shown for ALL types) */}
+              <div className="mt-10">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
+                  Broadcast Name
+                </label>
+                <input
+                  value={newReqTitle}
+                  onChange={(e) => setNewReqTitle(e.target.value)}
+                  placeholder={
+                    newReqType === DiscoveryType.EVENT
+                      ? "e.g. Redpath Study Jam"
+                      : newReqType === DiscoveryType.CLUB
+                        ? "e.g. McGill Robotics Club"
+                        : newReqType === DiscoveryType.NETWORKING
+                          ? "e.g. Google Networking Night"
+                          : "e.g. Capstone Teammates Needed"
+                  }
+                  className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-3xl font-bold outline-none focus:border-red-100 transition-all"
+                />
+              </div>
+
+
+
+
+              <div className="mt-12 space-y-10">
+
+              </div>
+              {newReqType === DiscoveryType.COLLAB_REQUEST && (
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
+                  What's the goal?
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {COLLAB_GOALS.map((g) => (
+                    <button
+                      key={g}
+                      type="button"
+                      onClick={() => setNewReqGoal(g)}
+                      className={`p-4 rounded-2xl text-left text-[10px] font-black transition-all border-2 ${
+                        newReqGoal === g
+                          ? "border-mcgill-red bg-red-50 text-mcgill-red shadow-md"
+                          : "border-slate-50 bg-slate-50 text-slate-500 hover:border-slate-100"
+                      }`}
+                    >
+                      {g}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+                {/* olivia */}
+                {needsDetails && (
                 <div>
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
-                    Custom Headline (Optional)
+                    Event Description
+                  </label>
+                  <textarea
+                    value={newReqDescription}
+                    onChange={(e) => setNewReqDescription(e.target.value)}
+                    placeholder="What’s happening? Where should people meet? Anything to bring?"
+                    className="w-full p-6 bg-slate-50 border-2 border-slate-50 rounded-3xl font-bold text-base outline-none focus:border-red-100 transition-all min-h-[120px]"
+                  />
+                </div>
+              )}
+
+
+              {/* olivia */}
+              {needsDetails && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
+                    Date
                   </label>
                   <input
-                    className="w-full p-6 bg-slate-50 border-2 border-slate-50 rounded-3xl font-bold text-lg outline-none focus:border-red-100 transition-all"
-                    value={newReqTitle}
-                    onChange={(e) => setNewReqTitle(e.target.value)}
-                    placeholder="e.g. COMP 250 Lab Partner"
+                    type="date"
+                    value={eventDate}
+                    onChange={(e) => setEventDate(e.target.value)}
+                    className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-3xl font-bold outline-none focus:border-red-100 transition-all"
                   />
                 </div>
 
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
+                    Time
+                  </label>
+                  <input
+                    type="time"
+                    value={eventTime}
+                    onChange={(e) => setEventTime(e.target.value)}
+                    className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-3xl font-bold outline-none focus:border-red-100 transition-all"
+                  />
+                </div>
+              </div>
+            )}
+
+
+                {/* olivia */}
+                {newReqType === DiscoveryType.COLLAB_REQUEST && (
                 <div>
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
                     Target Team Size
@@ -998,6 +1035,7 @@ const MAX_AVATAR_BYTES = 5_000_000;
                     {[2, 3, 4, 5, 6].map((n) => (
                       <button
                         key={n}
+                        type="button"
                         onClick={() => setNewReqSize(n)}
                         className={`w-14 h-14 rounded-2xl font-black text-xl transition-all ${
                           newReqSize === n
@@ -1010,16 +1048,17 @@ const MAX_AVATAR_BYTES = 5_000_000;
                     ))}
                   </div>
                 </div>
+              )}
+
 
                 <button
                   onClick={submitRequest}
-                  className="w-full py-6 bg-slate-900 text-white font-black text-lg rounded-[2.5rem] shadow-2xl hover:bg-slate-800 transition-all transform active:scale-95"
+                  className="w-full mt-10 py-6 bg-slate-900 text-white font-black text-lg rounded-[2.5rem] shadow-2xl hover:bg-slate-800 transition-all transform active:scale-95"
                 >
                   Send Broadcast
                 </button>
               </div>
             </div>
-          </div>
         )}
       </main>
     </div>
