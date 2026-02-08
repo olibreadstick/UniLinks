@@ -133,7 +133,8 @@ const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
   });
   const [pendingRole, setPendingRole] = useState<string>("");
   const [pendingCustomRole, setPendingCustomRole] = useState("");
-  const [isSpeaking, setIsSpeaking] = useState(false);  const [isLoading, setIsLoading] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -142,6 +143,15 @@ const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const roleStateRef = useRef({ selectedRole, customRole, pressure: personalitySettings.pressure, niceness: personalitySettings.niceness, formality: personalitySettings.formality });
 
+  const pendingPersonaText = pendingCustomRole.trim() || pendingRole;
+  const activePersonaText = customRole.trim() || selectedRole;
+  const hasPendingChanges =
+    pendingRole !== selectedRole ||
+    pendingCustomRole !== customRole ||
+    pendingSettings.pressure !== personalitySettings.pressure ||
+    pendingSettings.niceness !== personalitySettings.niceness ||
+    pendingSettings.formality !== personalitySettings.formality;
+
   // Generate role options when scenario changes
   useEffect(() => {
     const roles = getRoleSuggestionsForScenario(selectedScenario.title);
@@ -149,35 +159,38 @@ const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
     setSelectedRole(roles[0]);
     setCustomRole("");
     setShowCustomRoleInput(false);
+
+    // Reset pending to match applied defaults for new scenario
+    setPendingRole(roles[0]);
+    setPendingCustomRole("");
   }, [selectedScenario]);
 
-  // Detect role/personality changes during active session and restart
-  useEffect(() => {
-    const hasRoleChanged =
-      roleStateRef.current.selectedRole !== selectedRole ||
-      roleStateRef.current.customRole !== customRole ||
-      roleStateRef.current.pressure !== personalitySettings.pressure ||
-      roleStateRef.current.niceness !== personalitySettings.niceness ||
-      roleStateRef.current.formality !== personalitySettings.formality;
+  const applyChanges = () => {
+    const nextRole = pendingRole;
+    const nextCustomRole = pendingCustomRole;
+    const nextSettings = pendingSettings;
 
-    if (hasRoleChanged) {
-      roleStateRef.current = {
-        selectedRole,
-        customRole,
-        pressure: personalitySettings.pressure,
-        niceness: personalitySettings.niceness,
-        formality: personalitySettings.formality,
-      };
+    setSelectedRole(nextRole);
+    setCustomRole(nextCustomRole);
+    setPersonalitySettings(nextSettings);
+    setShowCustomRoleInput(!!nextCustomRole.trim());
 
-      if (isSessionActive) {
-        setStatus("Updating AI personality...");
-        stopSession();
-        setTimeout(() => {
-          startSession();
-        }, 600);
-      }
+    roleStateRef.current = {
+      selectedRole: nextRole,
+      customRole: nextCustomRole,
+      pressure: nextSettings.pressure,
+      niceness: nextSettings.niceness,
+      formality: nextSettings.formality,
+    };
+
+    if (isSessionActive) {
+      setStatus("Updating AI personality...");
+      stopSession();
+      setTimeout(() => {
+        startSession();
+      }, 600);
     }
-  }, [selectedRole, customRole, personalitySettings.pressure, personalitySettings.niceness, personalitySettings.formality, isSessionActive]);
+  };
 
   const handleOpenKeyDialog = async () => {
     if ((window as any).aistudio?.openSelectKey) {
@@ -835,9 +848,13 @@ Be encouraging but authentic to your assigned role. Reference McGill campus cont
                   {roleOptions.map((role) => (
                     <button
                       key={role}
-                      onClick={() => setSelectedRole(role)}
+                      onClick={() => {
+                        setPendingRole(role);
+                        setPendingCustomRole("");
+                        setShowCustomRoleInput(false);
+                      }}
                       className={`w-full px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
-                        selectedRole === role && !customRole
+                        pendingRole === role && !pendingCustomRole.trim()
                           ? "bg-mcgill-red text-white"
                           : "bg-white/5 border border-white/10 text-white/70 hover:border-white/30"
                       }`}
@@ -857,8 +874,8 @@ Be encouraging but authentic to your assigned role. Reference McGill campus cont
                     <input
                       type="text"
                       placeholder="Define your own role..."
-                      value={customRole}
-                      onChange={(e) => setCustomRole(e.target.value)}
+                      value={pendingCustomRole}
+                      onChange={(e) => setPendingCustomRole(e.target.value)}
                       className="w-full px-2 py-2 bg-white/10 border border-white/20 rounded text-xs text-white placeholder-white/30 focus:outline-none focus:border-mcgill-red"
                     />
                   </div>
@@ -875,16 +892,16 @@ Be encouraging but authentic to your assigned role. Reference McGill campus cont
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <label className="text-[9px] text-white/70 font-bold">Pressure Level</label>
-                      <span className="text-[9px] font-bold text-mcgill-red">{personalitySettings.pressure}%</span>
+                      <span className="text-[9px] font-bold text-mcgill-red">{pendingSettings.pressure}%</span>
                     </div>
                     <input
                       type="range"
                       min="0"
                       max="100"
-                      value={personalitySettings.pressure}
+                      value={pendingSettings.pressure}
                       onChange={(e) =>
-                        setPersonalitySettings({
-                          ...personalitySettings,
+                        setPendingSettings({
+                          ...pendingSettings,
                           pressure: parseInt(e.target.value),
                         })
                       }
@@ -900,16 +917,16 @@ Be encouraging but authentic to your assigned role. Reference McGill campus cont
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <label className="text-[9px] text-white/70 font-bold">Niceness</label>
-                      <span className="text-[9px] font-bold text-mcgill-red">{personalitySettings.niceness}%</span>
+                      <span className="text-[9px] font-bold text-mcgill-red">{pendingSettings.niceness}%</span>
                     </div>
                     <input
                       type="range"
                       min="0"
                       max="100"
-                      value={personalitySettings.niceness}
+                      value={pendingSettings.niceness}
                       onChange={(e) =>
-                        setPersonalitySettings({
-                          ...personalitySettings,
+                        setPendingSettings({
+                          ...pendingSettings,
                           niceness: parseInt(e.target.value),
                         })
                       }
@@ -925,16 +942,16 @@ Be encouraging but authentic to your assigned role. Reference McGill campus cont
                   <div>
                     <div className="flex justify-between items-center mb-2">
                       <label className="text-[9px] text-white/70 font-bold">Formality</label>
-                      <span className="text-[9px] font-bold text-mcgill-red">{personalitySettings.formality}%</span>
+                      <span className="text-[9px] font-bold text-mcgill-red">{pendingSettings.formality}%</span>
                     </div>
                     <input
                       type="range"
                       min="0"
                       max="100"
-                      value={personalitySettings.formality}
+                      value={pendingSettings.formality}
                       onChange={(e) =>
-                        setPersonalitySettings({
-                          ...personalitySettings,
+                        setPendingSettings({
+                          ...pendingSettings,
                           formality: parseInt(e.target.value),
                         })
                       }
@@ -948,12 +965,27 @@ Be encouraging but authentic to your assigned role. Reference McGill campus cont
                 </div>
               </div>
 
+              {/* Apply Changes */}
+              <div className="mb-8">
+                <button
+                  onClick={applyChanges}
+                  disabled={!hasPendingChanges}
+                  className={`w-full px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all border ${
+                    hasPendingChanges
+                      ? "bg-mcgill-red text-white border-mcgill-red hover:bg-red-600"
+                      : "bg-white/5 text-white/30 border-white/10 cursor-not-allowed"
+                  }`}
+                >
+                  Apply Changes
+                </button>
+              </div>
+
               {/* Current Role Display */}
-              {(selectedRole || customRole) && (
+              {(pendingRole || pendingCustomRole) && (
                 <div className="pt-6 border-t border-white/10">
                   <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-xl">
-                    <p className="text-[10px] text-emerald-300 font-black mb-1">Current Persona</p>
-                    <p className="text-sm text-white font-bold break-words">{customRole.trim() || selectedRole}</p>
+                    <p className="text-[10px] text-emerald-300 font-black mb-1">Pending Persona</p>
+                    <p className="text-sm text-white font-bold break-words">{pendingPersonaText}</p>
                   </div>
                 </div>
               )}
@@ -963,7 +995,7 @@ Be encouraging but authentic to your assigned role. Reference McGill campus cont
                 <div className="pt-6 border-t border-white/10 mt-auto">
                   <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-xl">
                     <p className="text-[10px] text-emerald-300 font-black mb-1">Active Persona</p>
-                    <p className="text-sm text-white font-bold break-words">{customRole.trim() || selectedRole}</p>
+                    <p className="text-sm text-white font-bold break-words">{activePersonaText}</p>
                   </div>
                 </div>
               )}

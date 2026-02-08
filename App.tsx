@@ -8,6 +8,7 @@ import { generateRecommendations } from "./services/gemini";
 import { DiscoveryItem, DiscoveryType, CollabRequest } from "./types";
 import type { UserProfile } from "./types";
 import McGillCourses from "./components/McGillCourses";
+import Calendar from "./components/Calendar";
 
 const ACCOUNTS_KEY = "uc_accounts";
 const ACTIVE_ACCOUNT_KEY = "uc_active_account";
