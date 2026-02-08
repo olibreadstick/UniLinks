@@ -139,6 +139,7 @@ const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const sessionRef = useRef<any>(null);
+  const sidePanelScrollRef = useRef<HTMLDivElement | null>(null);
   const nextStartTimeRef = useRef<number>(0);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const roleStateRef = useRef({ selectedRole, customRole, pressure: personalitySettings.pressure, niceness: personalitySettings.niceness, formality: personalitySettings.formality });
@@ -190,6 +191,12 @@ const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
         startSession();
       }, 600);
     }
+  };
+
+  const scrollSidePanelToBottom = () => {
+    const el = sidePanelScrollRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   };
 
   const handleOpenKeyDialog = async () => {
@@ -775,7 +782,7 @@ Be encouraging but authentic to your assigned role. Reference McGill campus cont
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col lg:flex-row">
+      <div className="flex-1 flex flex-col lg:flex-row min-h-0">
         {isQuotaFull ? (
           <div className="flex-1 flex flex-col items-center justify-center p-12 text-center bg-slate-900">
             <span className="text-6xl mb-6">🛰️</span>
@@ -795,7 +802,7 @@ Be encouraging but authentic to your assigned role. Reference McGill campus cont
           </div>
         ) : (
           <>
-            <div className="flex-[2] relative bg-black">
+            <div className="flex-[2] relative bg-black min-h-0">
               <video
                 ref={videoRef}
                 autoPlay
@@ -819,8 +826,18 @@ Be encouraging but authentic to your assigned role. Reference McGill campus cont
                 </span>
               </div>
             </div>
-            <div className="flex-1 bg-slate-800/50 p-8 flex flex-col overflow-hidden">
-              <div className="flex-1 overflow-y-scroll pr-4" style={{ scrollbarGutter: "stable" }}>
+            <div className="flex-1 bg-slate-800/50 p-8 flex flex-col overflow-hidden relative min-h-0">
+              <button
+                onClick={scrollSidePanelToBottom}
+                className="absolute top-6 right-6 px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-[10px] font-black rounded-2xl border border-white/10 transition-colors uppercase tracking-widest z-10"
+              >
+                Bottom
+              </button>
+              <div
+                ref={sidePanelScrollRef}
+                className="flex-1 min-h-0 overflow-y-auto pr-4"
+                style={{ scrollbarGutter: "stable" }}
+              >
               {/* Icebreakers Section */}
               <div className="mb-8">
                 <span className="text-[10px] font-black text-mcgill-red uppercase tracking-[0.3em] mb-3 block">
