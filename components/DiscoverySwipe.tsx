@@ -6,7 +6,6 @@ import HandshakeIcon from "../handshake.png";
 const CATEGORIES = [
   { id: "all", label: "All Discovery", icon: "" },
   { id: "collabs", label: "Collaboration Requests", icon: "" },
-  { id: "courses", label: "Courses & Study", icon: "" },
   { id: "clubs", label: "Clubs & Orgs", icon: "" },
   { id: "events", label: "Events & Parties", icon: "" },
   { id: "networking", label: "Networking", icon: "" },
@@ -15,8 +14,6 @@ const CATEGORIES = [
 const SUBCATEGORIES = [
   { id: "hackathon", label: "Hackathons", parent: "events" },
   { id: "frosh", label: "Frosh", parent: "events" },
-  { id: "lab", label: "Lab Partners", parent: "courses" },
-  { id: "capstone", label: "Capstone", parent: "courses" },
   { id: "internship", label: "Internships", parent: "networking" },
   { id: "full-time", label: "Full-time", parent: "networking" },
 ];
@@ -65,8 +62,118 @@ const MOCK_DATA: DiscoveryItem[] = [
       "https://images.unsplash.com/photo-1573164713988-8665fc963095?auto=format&fit=crop&q=80&w=800",
     tags: ["Networking", "Internship", "Tech"],
     company: "Google Cloud Canada",
+  },
+  {
+    id: "e1",
+    type: DiscoveryType.EVENT,
+    title: "Frosh Orientation 2026",
+    description: "Welcome week activities and meetups for new students.",
+    image:
+      "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&q=80&w=800",
+    tags: ["Frosh", "Orientation", "Social"],
+    metadata: { date: "2026-02-08", organizer: "Student Life" },
+    company: "McGill Orientation",
+    date: "2026-02-08",
+  },
+  {
+    id: "e2",
+    type: DiscoveryType.EVENT,
+    title: "McGill Banquet 2026",
+    description:
+      "Formal banquet for students and alumni — networking and awards.",
+    image:
+      "https://images.unsplash.com/photo-1542826438-0c9a8b9d2e9b?auto=format&fit=crop&q=80&w=800",
+    tags: ["Banquet", "Networking", "Formal"],
+    metadata: { date: "2026-03-01", organizer: "Alumni Office" },
+    company: "McGill Alumni",
+    date: "2026-03-01",
+  },
+  {
+    id: "e3",
+    type: DiscoveryType.EVENT,
+    title: "Frosh Party Night",
+    description: "Late-night social with DJs and campus clubs.",
+    image:
+      "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=800",
+    tags: ["Frosh", "Party"],
+    metadata: { date: "2026-02-09", organizer: "Campus Events" },
+    company: "Campus Events",
+    date: "2026-02-09",
+  },
+  {
+    id: "u124",
+    type: DiscoveryType.PARTNER,
+    title: "Alex Brown",
+    description:
+      "Looking for coding study buddies for COMP 250 and hackathons.",
+    image: "",
+    tags: ["COMP", "Study"],
+    creator: {
+      id: "u124",
+      name: "Alex Brown",
+      major: "Computer Science",
+      interests: ["Algorithms", "Hackathons"],
+      bio: "Enthusiastic coder and part-time barista.",
+      avatar:
+        "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=400",
+      gpa: "3.6",
+      skills: ["JavaScript", "React"],
+      experience: ["Hack McGill 2024"],
+    },
+  },
+  {
+    id: "u125",
+    type: DiscoveryType.PARTNER,
+    title: "Lila Nguyen",
+    description: "Organizing a study group for MGCR 341 and MGCR 222.",
+    image: "",
+    tags: ["MGCR", "Study Group"],
+    creator: {
+      id: "u125",
+      name: "Lila Nguyen",
+      major: "Management",
+      interests: ["Finance", "Clubs"],
+      bio: "Happy to share notes and host study sessions.",
+      avatar:
+        "https://images.unsplash.com/photo-1545996124-1b9d7b0a7f22?auto=format&fit=crop&q=80&w=400",
+      gpa: "3.9",
+      skills: ["Organization"],
+      experience: [],
+    },
+  },
+  {
+    id: "club1",
+    type: DiscoveryType.CLUB,
+    title: "Coding Society",
+    description: "Weekly coding meetups, workshops and projects.",
+    image:
+      "https://images.unsplash.com/photo-1517694712202-14dd9538aa97?auto=format&fit=crop&q=80&w=800",
+    tags: ["Coding", "Workshops"],
+    date: "2026-02-12",
+  },
+  {
+    id: "e4",
+    type: DiscoveryType.EVENT,
+    title: "Research Symposium",
+    description: "Poster sessions and talks from undergraduate researchers.",
+    image:
+      "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&q=80&w=800",
+    tags: ["Research", "Academic"],
+    metadata: { date: "2026-02-18", organizer: "Research Office" },
+    date: "2026-02-18",
+  },
+  {
+    id: "e5",
+    type: DiscoveryType.NETWORKING,
+    title: "Shopify Info Session",
+    description: "Learn about internship and co-op roles at Shopify.",
+    image:
+      "https://images.unsplash.com/photo-1521737604893-d14cc237f11d?auto=format&fit=crop&q=80&w=800",
+    tags: ["Networking", "Careers"],
+    company: "Shopify",
     date: "2026-02-20",
   },
+
   {
     id: "n2",
     type: DiscoveryType.NETWORKING,
@@ -162,17 +269,13 @@ const DiscoverySwipe: React.FC<DiscoverySwipeProps> = ({
     const matchesCat =
       activeCat === "collabs"
         ? item.type === DiscoveryType.COLLAB_REQUEST
-        : activeCat === "courses"
-          ? item.type === DiscoveryType.PARTNER ||
-            item.type === DiscoveryType.COURSE ||
-            item.type === DiscoveryType.COLLAB_REQUEST
-          : activeCat === "clubs"
-            ? item.type === DiscoveryType.CLUB
-            : activeCat === "events"
-              ? item.type === DiscoveryType.EVENT
-              : activeCat === "networking"
-                ? item.type === DiscoveryType.NETWORKING
-                : true;
+        : activeCat === "clubs"
+          ? item.type === DiscoveryType.CLUB
+          : activeCat === "events"
+            ? item.type === DiscoveryType.EVENT
+            : activeCat === "networking"
+              ? item.type === DiscoveryType.NETWORKING
+              : true;
 
     if (activeSub) {
       return item.tags.some((t) => t.toLowerCase() === activeSub.toLowerCase());
@@ -359,7 +462,7 @@ const hasAuthor = Boolean(authorName);
               )}
             </div>
 
-            <div className="absolute bottom-0 left-0 p-10 lg:p-12 text-white w-full">
+            <div className="absolute bottom-0 left-0 p-10 lg:p-12 pt-24 lg:pt-32 text-white w-full">
               <h3 className="text-4xl lg:text-5xl font-black mb-4 leading-tight tracking-tighter">
                 {currentItem.title}
               </h3>
@@ -400,16 +503,7 @@ const hasAuthor = Boolean(authorName);
                 ))}
               </div>
 
-              {currentItem.type === DiscoveryType.NETWORKING && (
-                <div className="flex gap-2 mt-8">
-                  <button className="flex-1 py-4 bg-mcgill-red text-white font-black text-xs uppercase tracking-widest rounded-2xl shadow-xl hover:bg-red-600 transition-all">
-                    Apply Now
-                  </button>
-                  <button className="flex-1 py-4 bg-white/10 border border-white/20 text-white font-black text-xs uppercase tracking-widest rounded-2xl backdrop-blur-md hover:bg-white/20 transition-all">
-                    Learn More
-                  </button>
-                </div>
-              )}
+              {/* Networking posts: no CTAs — information only */}
             </div>
           </div>
 
