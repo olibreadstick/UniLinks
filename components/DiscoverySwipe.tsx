@@ -134,6 +134,8 @@ const DiscoverySwipe: React.FC<DiscoverySwipeProps> = ({
   const [activeSub, setActiveSub] = useState<string | null>(null);
 
   const [modalOpen, setModalOpen] = useState(false);
+
+  
   const [modalSubject, setModalSubject] = useState<{
     type: "profile" | "company" | "event";
     id: string | null;
@@ -180,6 +182,19 @@ const DiscoverySwipe: React.FC<DiscoverySwipeProps> = ({
 
   const currentItem =
     filteredData[currentIndex % (filteredData.length || 1)] || combinedData[0];
+
+  const authorName =
+  (currentItem as any)?.creatorName || currentItem.creator?.name;
+
+const authorAvatar =
+  (currentItem as any)?.creatorAvatar || currentItem.creator?.avatar;
+
+const authorMajor =
+  (currentItem as any)?.creatorMajor || currentItem.creator?.major;
+
+const hasAuthor = Boolean(authorName);
+
+
 
   const eventDateRaw =
     currentItem?.date ||
@@ -287,28 +302,32 @@ const DiscoverySwipe: React.FC<DiscoverySwipeProps> = ({
             </div>
 
             <div className="absolute top-8 right-8 flex items-center gap-3">
-              {currentItem.creator ? (
+              {hasAuthor ? (
                 <button
                   onClick={() =>
                     openSubjectModal(
                       "profile",
-                      currentItem.creator?.id || null,
-                      currentItem.creator?.name,
+                      (currentItem as any).creatorId || currentItem.creator?.id || null,
+                      authorName
                     )
                   }
                   className="flex items-center gap-3 bg-white/10 backdrop-blur-md rounded-full px-3 py-2 border border-white/10 hover:scale-105 transition-transform"
                 >
                   <img
-                    src={currentItem.creator.avatar}
-                    alt={currentItem.creator.name}
+                    src={
+                      authorAvatar?.trim()
+                        ? authorAvatar
+                        : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
+                            authorName || "Student"
+                          )}`
+                    }
+                    alt={authorName}
                     className="w-10 h-10 rounded-full object-cover"
                   />
                   <div className="text-right">
-                    <div className="text-sm font-black text-white">
-                      {currentItem.creator.name}
-                    </div>
+                    <div className="text-sm font-black text-white">{authorName}</div>
                     <div className="text-[10px] text-slate-200">
-                      {currentItem.creator.major}
+                      {authorMajor || "McGill Student"}
                     </div>
                   </div>
                 </button>
@@ -318,7 +337,7 @@ const DiscoverySwipe: React.FC<DiscoverySwipeProps> = ({
                     openSubjectModal(
                       "company",
                       currentItem.company || currentItem.id,
-                      currentItem.company || currentItem.title,
+                      currentItem.company || currentItem.title
                     )
                   }
                   className="flex items-center gap-3 bg-white/10 backdrop-blur-md rounded-full px-3 py-2 border border-white/10 hover:scale-105 transition-transform"

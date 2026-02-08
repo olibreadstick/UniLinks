@@ -34,10 +34,17 @@ export interface DiscoveryItem {
   date?: string; // ISO date string for events
 }
 
+
 export interface CollabRequest extends DiscoveryItem {
   creatorId: string;
+
+  creatorName?: string;
+  creatorAvatar?: string;
+
   targetGroupSize: number;
-  participants: string[]; // List of names/IDs of people interested
+  participants: string[];
+  eventDate?: string;
+  eventTime?: string;
 }
 
 export interface Message {
