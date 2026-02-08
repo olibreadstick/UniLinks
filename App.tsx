@@ -56,6 +56,16 @@ const COLLAB_GOALS = [
   "Just browsing campus events?",
 ];
 
+const CREATE_TYPES = [
+  { id: DiscoveryType.COLLAB_REQUEST, label: "Collaboration Request" },
+  { id: DiscoveryType.EVENT, label: "Event" },
+  { id: DiscoveryType.CLUB, label: "Club / Org" },
+  { id: DiscoveryType.NETWORKING, label: "Networking" },
+  { id: DiscoveryType.PARTNER, label: "Study / Partner" }, // optional
+  // { id: DiscoveryType.COURSE, label: "Course" }, // only if you support this type in your enum
+] as const;
+
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState("discover");
 
@@ -71,6 +81,8 @@ const App: React.FC = () => {
   // Profile (loaded per account)
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
+
+  const [newReqType, setNewReqType] = useState<DiscoveryType>(DiscoveryType.COLLAB_REQUEST);
 
 const MAX_AVATAR_BYTES = 5_000_000; 
 
@@ -94,6 +106,23 @@ const MAX_AVATAR_BYTES = 5_000_000;
     };
     reader.onerror = () => alert("Could not read that file. Try another image.");
     reader.readAsDataURL(file);
+  };
+
+
+    const defaultImageFor = (t: DiscoveryType) => {
+    switch (t) {
+      case DiscoveryType.COLLAB_REQUEST:
+      case DiscoveryType.PARTNER:
+        return "https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&q=80&w=800";
+      case DiscoveryType.EVENT:
+        return "https://images.unsplash.com/photo-1517245386807-bb43f82c33c4?auto=format&fit=crop&q=80&w=800";
+      case DiscoveryType.CLUB:
+        return "https://images.unsplash.com/photo-1522202176988-66273c2fd55f?auto=format&fit=crop&q=80&w=800";
+      case DiscoveryType.NETWORKING:
+        return "https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&q=80&w=800";
+      default:
+        return "https://images.unsplash.com/photo-1523240795612-9a054b0db644?auto=format&fit=crop&q=80&w=800";
+    }
   };
 
   // Discovery & Hearting State
@@ -262,24 +291,31 @@ const MAX_AVATAR_BYTES = 5_000_000;
   };
 
   const submitRequest = () => {
-    if (!userProfile) return;
+  if (!userProfile) return;
 
-    const newReq: CollabRequest = {
-      id: `req_${Date.now()}`,
-      type: DiscoveryType.COLLAB_REQUEST,
-      title: newReqTitle || newReqGoal,
-      description: `Project request by ${userProfile.name}. Target team size: ${newReqSize}.`,
-      tags: [userProfile.major, "Collaboration"],
-      creatorId: userProfile.id,
-      targetGroupSize: newReqSize,
-      participants: [],
-    };
+  const title =
+    newReqTitle ||
+    (newReqType === DiscoveryType.COLLAB_REQUEST ? newReqGoal : "New Broadcast");
 
-    setCollabRequests((prev) => [...prev, newReq]);
-    setIsCollabModalOpen(false);
-    setNewReqTitle("");
-    setActiveTab("discover");
+  const newItem: CollabRequest = {
+    id: `req_${Date.now()}`,
+    type: newReqType,
+    title,
+    description: `Posted by ${userProfile.name}.`,
+    tags: [userProfile.major, "Collaboration"],
+    creatorId: userProfile.id,
+    targetGroupSize: newReqType === DiscoveryType.COLLAB_REQUEST ? newReqSize : undefined,
+    participants: [],
+    image: defaultImageFor(newReqType), // ✅ make sure your type supports this field (see note below)
   };
+
+  setCollabRequests((prev) => [newItem, ...prev]); // prepend feels better
+  setIsCollabModalOpen(false);
+  setNewReqTitle("");
+  setNewReqType(DiscoveryType.COLLAB_REQUEST);
+  setActiveTab("discover");
+};
+
 
   const onToggleInterested = (requestId: string) => {
     if (!activeAccountId) return;
@@ -894,6 +930,31 @@ const MAX_AVATAR_BYTES = 5_000_000;
                   </svg>
                 </button>
               </div>
+
+              <div>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
+                Broadcast Type
+              </label>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {CREATE_TYPES.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setNewReqType(t.id)}
+                    className={`p-4 rounded-2xl text-left text-[10px] font-black transition-all border-2 ${
+                      newReqType === t.id
+                        ? "border-mcgill-red bg-red-50 text-mcgill-red shadow-md"
+                        : "border-slate-50 bg-slate-50 text-slate-500 hover:border-slate-100"
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+
 
               <div className="space-y-8">
                 <div>

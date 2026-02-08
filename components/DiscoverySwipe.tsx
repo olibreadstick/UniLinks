@@ -7,6 +7,7 @@ import HandshakeIcon from '../handshake.png';
 
 const CATEGORIES = [
   { id: 'all', label: 'All Discovery', icon: '' },
+  { id: 'collabs', label: 'Collaboration Requests', icon: '' },
   { id: 'courses', label: 'Courses & Study', icon: '' },
   { id: 'clubs', label: 'Clubs & Orgs', icon: '' },
   { id: 'events', label: 'Events & Parties', icon: '' },
@@ -101,6 +102,7 @@ const DiscoverySwipe: React.FC<DiscoverySwipeProps> = ({ onHeart, externalItems 
   const filteredData = combinedData.filter(item => {
     if (activeCat === 'all' && !activeSub) return true;
     const matchesCat = 
+      activeCat === 'collabs' ? item.type === DiscoveryType.COLLAB_REQUEST :
       activeCat === 'courses' ? item.type === DiscoveryType.PARTNER || item.type === DiscoveryType.COURSE || item.type === DiscoveryType.COLLAB_REQUEST :
       activeCat === 'clubs' ? item.type === DiscoveryType.CLUB :
       activeCat === 'events' ? item.type === DiscoveryType.EVENT :
