@@ -19,7 +19,7 @@ const Welcome: React.FC<WelcomeProps> = ({ onStart }) => {
       <div className="absolute inset-0 opacity-[0.06] bg-[radial-gradient(circle_at_1px_1px,rgba(255,255,255,0.9)_1px,transparent_0)] [background-size:32px_32px]" />
 
       {/* ================= CONTENT ================= */}
-      <div className="relative z-10 h-full w-full px-24 py-16 flex flex-col">
+      <div className="relative z-10 h-full w-full px-24 py-16 flex flex-col scale-[0.7] origin-center">
         {/* ================= TOP BRAND ================= */}
         <div className="flex flex-col items-center text-center">
           <div className="flex items-center gap-16">
