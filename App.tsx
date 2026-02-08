@@ -14,12 +14,8 @@ const ACCOUNTS_KEY = "uc_accounts";
 const ACTIVE_ACCOUNT_KEY = "uc_active_account";
 const GLOBAL_COLLABS_KEY = "uc_global_collabs";
 
-
 const profileKey = (id: string) => `uc_profile_${id}`;
 const heartsKey = (id: string) => `uc_hearted_${id}`;
-
-
-
 
 type Account = { id: string; name: string; createdAt: number };
 
@@ -63,10 +59,8 @@ const CREATE_TYPES = [
   { id: DiscoveryType.NETWORKING, label: "Networking" },
 ] as const;
 
-
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState("discover");
-
 
   const [showWelcome, setShowWelcome] = useState(true);
   const [onboardingComplete, setOnboardingComplete] = useState(false);
@@ -77,9 +71,11 @@ const App: React.FC = () => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
 
-  const [newReqType, setNewReqType] = useState<DiscoveryType>(DiscoveryType.COLLAB_REQUEST);
+  const [newReqType, setNewReqType] = useState<DiscoveryType>(
+    DiscoveryType.COLLAB_REQUEST,
+  );
 
-const MAX_AVATAR_BYTES = 5_000_000; 
+  const MAX_AVATAR_BYTES = 5_000_000;
 
   const handleAvatarFile = (file: File | null) => {
     if (!file) return;
@@ -97,14 +93,14 @@ const MAX_AVATAR_BYTES = 5_000_000;
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = reader.result as string;
-      setUserProfile(prev => (prev ? { ...prev, avatar: dataUrl } : prev));
+      setUserProfile((prev) => (prev ? { ...prev, avatar: dataUrl } : prev));
     };
-    reader.onerror = () => alert("Could not read that file. Try another image.");
+    reader.onerror = () =>
+      alert("Could not read that file. Try another image.");
     reader.readAsDataURL(file);
   };
 
-
-    const defaultImageFor = (t: DiscoveryType) => {
+  const defaultImageFor = (t: DiscoveryType) => {
     switch (t) {
       case DiscoveryType.COLLAB_REQUEST:
       case DiscoveryType.PARTNER:
@@ -134,7 +130,6 @@ const MAX_AVATAR_BYTES = 5_000_000;
   const [eventDate, setEventDate] = useState(""); // YYYY-MM-DD
   const [eventTime, setEventTime] = useState(""); // HH:MM
 
-
   const [recs, setRecs] = useState<{ title: string; reason: string }[]>([]);
   const [hasPersonalKey, setHasPersonalKey] = useState(false);
 
@@ -145,7 +140,9 @@ const MAX_AVATAR_BYTES = 5_000_000;
     const savedAccounts = localStorage.getItem(ACCOUNTS_KEY);
     const savedActive = localStorage.getItem(ACTIVE_ACCOUNT_KEY);
 
-    const parsedAccounts: Account[] = savedAccounts ? JSON.parse(savedAccounts) : [];
+    const parsedAccounts: Account[] = savedAccounts
+      ? JSON.parse(savedAccounts)
+      : [];
 
     if (parsedAccounts.length === 0) {
       const id = makeAccountId();
@@ -216,51 +213,52 @@ const MAX_AVATAR_BYTES = 5_000_000;
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
-
   useEffect(() => {
-  if (!userProfile || !activeAccountId) return;
-  if (userProfile.id !== activeAccountId) return;
+    if (!userProfile || !activeAccountId) return;
+    if (userProfile.id !== activeAccountId) return;
 
-  setAccounts(prev => {
-    const current = prev.find(a => a.id === activeAccountId);
-    if (!current) return prev;
+    setAccounts((prev) => {
+      const current = prev.find((a) => a.id === activeAccountId);
+      if (!current) return prev;
 
-   
-    if (current.name === userProfile.name) return prev;
+      if (current.name === userProfile.name) return prev;
 
-    const updated = prev.map(acc =>
-      acc.id === activeAccountId ? { ...acc, name: userProfile.name } : acc
-    );
+      const updated = prev.map((acc) =>
+        acc.id === activeAccountId ? { ...acc, name: userProfile.name } : acc,
+      );
 
-    localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(updated));
-    return updated;
-  });
-}, [userProfile?.name, userProfile?.id, activeAccountId]);
-
-
-
-
+      localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(updated));
+      return updated;
+    });
+  }, [userProfile?.name, userProfile?.id, activeAccountId]);
 
   useEffect(() => {
     if (!activeAccountId || !userProfile) return;
-    localStorage.setItem(profileKey(activeAccountId), JSON.stringify(userProfile));
+    localStorage.setItem(
+      profileKey(activeAccountId),
+      JSON.stringify(userProfile),
+    );
   }, [activeAccountId, userProfile]);
 
   useEffect(() => {
     if (!activeAccountId) return;
-    localStorage.setItem(heartsKey(activeAccountId), JSON.stringify(heartedItems));
+    localStorage.setItem(
+      heartsKey(activeAccountId),
+      JSON.stringify(heartedItems),
+    );
   }, [activeAccountId, heartedItems]);
 
   useEffect(() => {
-  localStorage.setItem(GLOBAL_COLLABS_KEY, JSON.stringify(collabRequests));
-}, [collabRequests]);
-
+    localStorage.setItem(GLOBAL_COLLABS_KEY, JSON.stringify(collabRequests));
+  }, [collabRequests]);
 
   useEffect(() => {
     if (!userProfile) return;
     const fetchRecs = async () => {
       if (userProfile.interests.length > 0) {
-        const suggestions = await generateRecommendations(userProfile.interests);
+        const suggestions = await generateRecommendations(
+          userProfile.interests,
+        );
         setRecs(suggestions);
       }
     };
@@ -278,8 +276,9 @@ const MAX_AVATAR_BYTES = 5_000_000;
     }
   };
 
-
-  {/* olivia */}
+  {
+    /* olivia */
+  }
   const submitRequest = () => {
     if (!userProfile) return;
 
@@ -291,12 +290,14 @@ const MAX_AVATAR_BYTES = 5_000_000;
       (isCollab ? newReqGoal : isEvent ? "New Event" : "New Broadcast");
 
     const description = isEvent
-      ? (newReqDescription?.trim() || `Event posted by ${userProfile.name}.`)
+      ? newReqDescription?.trim() || `Event posted by ${userProfile.name}.`
       : isCollab
         ? `Project request by ${userProfile.name}. Target team size: ${newReqSize}.`
         : `Posted by ${userProfile.name}.`;
 
-        {/* olivia */}
+    {
+      /* olivia */
+    }
     const newItem: CollabRequest = {
       id: `req_${Date.now()}`,
       type: newReqType,
@@ -327,7 +328,6 @@ const MAX_AVATAR_BYTES = 5_000_000;
     setActiveTab("discover");
   };
 
-
   const onToggleInterested = (requestId: string) => {
     if (!activeAccountId) return;
 
@@ -335,7 +335,9 @@ const MAX_AVATAR_BYTES = 5_000_000;
       const next = prev.map((r) => {
         if (r.id !== requestId) return r;
 
-        const participants = Array.isArray(r.participants) ? r.participants : [];
+        const participants = Array.isArray(r.participants)
+          ? r.participants
+          : [];
         const already = participants.includes(activeAccountId);
 
         return {
@@ -354,7 +356,7 @@ const MAX_AVATAR_BYTES = 5_000_000;
   const toggleArrayItem = (
     field: "skills" | "experience",
     index: number,
-    value: string
+    value: string,
   ) => {
     setUserProfile((prev) => {
       if (!prev) return prev;
@@ -365,12 +367,16 @@ const MAX_AVATAR_BYTES = 5_000_000;
   };
 
   const addArrayItem = (field: "skills" | "experience") => {
-    setUserProfile((prev) => (prev ? { ...prev, [field]: [...prev[field], ""] } : prev));
+    setUserProfile((prev) =>
+      prev ? { ...prev, [field]: [...prev[field], ""] } : prev,
+    );
   };
 
   const removeArrayItem = (field: "skills" | "experience", index: number) => {
     setUserProfile((prev) =>
-      prev ? { ...prev, [field]: prev[field].filter((_, i) => i !== index) } : prev,
+      prev
+        ? { ...prev, [field]: prev[field].filter((_, i) => i !== index) }
+        : prev,
     );
   };
 
@@ -381,14 +387,13 @@ const MAX_AVATAR_BYTES = 5_000_000;
     }
   };
 
-  {/* Olivia */}
+  {
+    /* Olivia */
+  }
   const needsDetails =
     newReqType === DiscoveryType.EVENT ||
     newReqType === DiscoveryType.NETWORKING ||
     newReqType === DiscoveryType.CLUB;
-
-
-
 
   if (showWelcome) {
     return (
@@ -402,7 +407,8 @@ const MAX_AVATAR_BYTES = 5_000_000;
   }
 
   if (!userProfile) return null;
-  if (!onboardingComplete) return <Onboarding onComplete={handleOnboardingComplete} />;
+  if (!onboardingComplete)
+    return <Onboarding onComplete={handleOnboardingComplete} />;
 
   const renderContent = () => {
     switch (activeTab) {
@@ -452,12 +458,42 @@ const MAX_AVATAR_BYTES = 5_000_000;
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-16">
                   {[
-                    { name: "SSMU Club Fair", type: "Event", date: "Sept 14", color: "bg-indigo-500" },
-                    { name: "McGill Outdoors Club", type: "Community", date: "Active Now", color: "bg-emerald-500" },
-                    { name: "Gerts Student Bar", type: "Venue", date: "Open 4pm", color: "bg-amber-500" },
-                    { name: "Desautels Networking", type: "Career", date: "Oct 02", color: "bg-rose-500" },
-                    { name: "Redpath Study Group", type: "Academic", date: "Ongoing", color: "bg-sky-500" },
-                    { name: "Daily Martlet Fans", type: "Athletics", date: "Saturday", color: "bg-mcgill-red" },
+                    {
+                      name: "SSMU Club Fair",
+                      type: "Event",
+                      date: "Sept 14",
+                      color: "bg-indigo-500",
+                    },
+                    {
+                      name: "McGill Outdoors Club",
+                      type: "Community",
+                      date: "Active Now",
+                      color: "bg-emerald-500",
+                    },
+                    {
+                      name: "Gerts Student Bar",
+                      type: "Venue",
+                      date: "Open 4pm",
+                      color: "bg-amber-500",
+                    },
+                    {
+                      name: "Desautels Networking",
+                      type: "Career",
+                      date: "Oct 02",
+                      color: "bg-rose-500",
+                    },
+                    {
+                      name: "Redpath Study Group",
+                      type: "Academic",
+                      date: "Ongoing",
+                      color: "bg-sky-500",
+                    },
+                    {
+                      name: "Daily Martlet Fans",
+                      type: "Athletics",
+                      date: "Saturday",
+                      color: "bg-mcgill-red",
+                    },
                   ].map((item) => (
                     <div
                       key={item.name}
@@ -468,7 +504,9 @@ const MAX_AVATAR_BYTES = 5_000_000;
                       >
                         {item.name[0]}
                       </div>
-                      <h4 className="text-xl font-bold text-slate-900 mb-1">{item.name}</h4>
+                      <h4 className="text-xl font-bold text-slate-900 mb-1">
+                        {item.name}
+                      </h4>
                       <div className="flex items-center justify-between">
                         <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">
                           {item.type}
@@ -487,8 +525,12 @@ const MAX_AVATAR_BYTES = 5_000_000;
                       key={i}
                       className="bg-white p-6 rounded-[2rem] border border-white/10 shadow-lg"
                     >
-                      <h4 className="font-bold text-slate-900 text-lg mb-2">{rec.title}</h4>
-                      <p className="text-sm text-slate-500 leading-relaxed font-medium">{rec.reason}</p>
+                      <h4 className="font-bold text-slate-900 text-lg mb-2">
+                        {rec.title}
+                      </h4>
+                      <p className="text-sm text-slate-500 leading-relaxed font-medium">
+                        {rec.reason}
+                      </p>
                     </div>
                   ))}
                 </div>
@@ -508,7 +550,11 @@ const MAX_AVATAR_BYTES = 5_000_000;
                 Event Calendar
               </h2>
             </header>
-            <Calendar savedItems={heartedItems} allItems={collabRequests} onSaveItem={handleHeart} />
+            <Calendar
+              savedItems={heartedItems}
+              allItems={collabRequests}
+              onSaveItem={handleHeart}
+            />
           </div>
         );
 
@@ -532,13 +578,12 @@ const MAX_AVATAR_BYTES = 5_000_000;
                         userProfile.avatar?.trim()
                           ? userProfile.avatar
                           : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
-                              userProfile.name || "McGill Student"
+                              userProfile.name || "McGill Student",
                             )}`
                       }
-                      alt="Profile" 
+                      alt="Profile"
                       className="w-full h-full object-cover"
                     />
-
                   </div>
                 </div>
 
@@ -550,7 +595,12 @@ const MAX_AVATAR_BYTES = 5_000_000;
                       </label>
                       <input
                         value={userProfile.name}
-                        onChange={(e) => setUserProfile({ ...userProfile, name: e.target.value })}
+                        onChange={(e) =>
+                          setUserProfile({
+                            ...userProfile,
+                            name: e.target.value,
+                          })
+                        }
                         className="w-full p-3 bg-slate-50 rounded-xl font-bold"
                       />
                     </div>
@@ -561,7 +611,12 @@ const MAX_AVATAR_BYTES = 5_000_000;
                       </label>
                       <input
                         value={userProfile.gpa}
-                        onChange={(e) => setUserProfile({ ...userProfile, gpa: e.target.value })}
+                        onChange={(e) =>
+                          setUserProfile({
+                            ...userProfile,
+                            gpa: e.target.value,
+                          })
+                        }
                         className="w-full p-3 bg-slate-50 rounded-xl font-bold"
                         placeholder="e.g. 4.0"
                       />
@@ -575,14 +630,18 @@ const MAX_AVATAR_BYTES = 5_000_000;
                       <input
                         type="file"
                         accept="image/*"
-                        onChange={(e) => handleAvatarFile(e.target.files?.[0] ?? null)}
+                        onChange={(e) =>
+                          handleAvatarFile(e.target.files?.[0] ?? null)
+                        }
                         className="w-full p-3 bg-slate-50 rounded-xl font-bold"
                       />
 
                       <button
                         type="button"
                         onClick={() =>
-                          setUserProfile((prev) => (prev ? { ...prev, avatar: "" } : prev))
+                          setUserProfile((prev) =>
+                            prev ? { ...prev, avatar: "" } : prev,
+                          )
                         }
                         className="w-full mt-3 py-3 bg-white border border-slate-200 rounded-xl text-[9px] font-black text-slate-400 hover:text-mcgill-red hover:border-mcgill-red transition-all uppercase"
                       >
@@ -590,87 +649,61 @@ const MAX_AVATAR_BYTES = 5_000_000;
                       </button>
                     </div>
 
-                      <button
-                        onClick={() => setIsEditingProfile(false)}
-                        className="w-full py-4 bg-mcgill-red text-white rounded-2xl font-black uppercase text-xs shadow-lg"
-                      >
-                        Save Profile
-                      </button>
-                    </div>
-                  ) : (
-
-                    <>
-                      <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-1">
-                        {userProfile.name}
-                      </h2>
-                      <p className="text-mcgill-red font-black text-sm uppercase tracking-widest mb-2">
-                        {userProfile.major}
-                      </p>
-                      <p className="text-slate-400 font-bold text-xs mb-8 italic">
-                        GPA: {userProfile.gpa}
-                      </p>
-                      <button
-                        onClick={() => setIsEditingProfile(true)}
-                        className="px-8 py-3 bg-slate-100 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-200 transition-all"
-                      >
-                        Edit Experience & Stats
-                      </button>
-                    </>
-                  )}
-
-                <div className="mt-8 w-full p-5 bg-slate-50 rounded-3xl border border-slate-100">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                      AI Connection
-                    </span>
-                    <div
-                      className={`w-2 h-2 rounded-full ${
-                        hasPersonalKey ? "bg-green-500" : "bg-amber-400"
-                      } animate-pulse`}
-                    />
+                    <button
+                      onClick={() => setIsEditingProfile(false)}
+                      className="w-full py-4 bg-mcgill-red text-white rounded-2xl font-black uppercase text-xs shadow-lg"
+                    >
+                      Save Profile
+                    </button>
                   </div>
-                  <p className="text-[10px] text-slate-500 font-medium mb-3 text-left">
-                    {hasPersonalKey
-                      ? "Connected via Personal Key (Priority Access)"
-                      : "Connected via Campus Shared Key"}
-                  </p>
-                  <button
-                    onClick={handleUpdateKey}
-                    className="w-full py-2 bg-white border border-slate-200 rounded-xl text-[9px] font-black text-slate-400 hover:text-mcgill-red hover:border-mcgill-red transition-all uppercase"
-                  >
-                    {hasPersonalKey ? "Manage Key" : "Connect Personal Key"}
-                  </button>
-                </div>
+                ) : (
+                  <>
+                    <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-1">
+                      {userProfile.name}
+                    </h2>
+                    <p className="text-mcgill-red font-black text-sm uppercase tracking-widest mb-2">
+                      {userProfile.major}
+                    </p>
+                    <p className="text-slate-400 font-bold text-xs mb-8 italic">
+                      GPA: {userProfile.gpa}
+                    </p>
+                    <button
+                      onClick={() => setIsEditingProfile(true)}
+                      className="px-8 py-3 bg-slate-100 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-200 transition-all"
+                    >
+                      Edit Experience & Stats
+                    </button>
+                  </>
+                )}
 
                 <div className="mt-12 w-full space-y-8 text-left">
                   <div>
                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex justify-between items-center">
                       Experience
-                      {isEditingProfile && (
-                        <button onClick={() => addArrayItem("experience")} className="text-mcgill-red font-black text-lg">
-                          +
-                        </button>
-                      )}
+                      <button
+                        onClick={() => addArrayItem("experience")}
+                        className="text-mcgill-red font-black text-lg hover:scale-110 transition-transform"
+                      >
+                        +
+                      </button>
                     </h4>
                     <div className="space-y-2">
                       {userProfile.experience.map((exp, i) => (
                         <div key={i} className="flex gap-2">
-                          {isEditingProfile ? (
-                            <input
-                              value={exp}
-                              onChange={(e) => toggleArrayItem("experience", i, e.target.value)}
-                              className="flex-1 p-3 bg-slate-50 rounded-xl text-xs font-medium border border-slate-100"
-                            />
-                          ) : (
-                            <div className="flex-1 p-4 bg-slate-50 border border-slate-100 rounded-2xl text-xs font-medium text-slate-600">
-                              {exp}
-                            </div>
-                          )}
-                          {isEditingProfile && (
-                            <button onClick={() => removeArrayItem("experience", i)} className="text-slate-200 hover:text-red-500">
-                              ×
-                            </button>
-                          )}
+                          <input
+                            value={exp}
+                            onChange={(e) =>
+                              toggleArrayItem("experience", i, e.target.value)
+                            }
+                            className="flex-1 p-3 bg-slate-50 rounded-xl text-xs font-medium border border-slate-100"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => removeArrayItem("experience", i)}
+                            className="text-slate-200 hover:text-red-500 font-bold text-lg transition-colors"
+                          >
+                            ×
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -679,31 +712,30 @@ const MAX_AVATAR_BYTES = 5_000_000;
                   <div>
                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex justify-between items-center">
                       Skills
-                      {isEditingProfile && (
-                        <button onClick={() => addArrayItem("skills")} className="text-mcgill-red font-black text-lg">
-                          +
-                        </button>
-                      )}
+                      <button
+                        onClick={() => addArrayItem("skills")}
+                        className="text-mcgill-red font-black text-lg hover:scale-110 transition-transform"
+                      >
+                        +
+                      </button>
                     </h4>
                     <div className="flex flex-wrap gap-2">
                       {userProfile.skills.map((skill, i) => (
-                        <div key={i} className="flex items-center gap-1">
-                          {isEditingProfile ? (
-                            <input
-                              value={skill}
-                              onChange={(e) => toggleArrayItem("skills", i, e.target.value)}
-                              className="w-20 p-2 bg-slate-50 rounded-lg text-[9px] font-black"
-                            />
-                          ) : (
-                            <span className="px-3 py-1.5 bg-slate-900 text-white text-[9px] font-black rounded-lg uppercase tracking-wider">
-                              {skill}
-                            </span>
-                          )}
-                          {isEditingProfile && (
-                            <button onClick={() => removeArrayItem("skills", i)} className="text-slate-300">
-                              ×
-                            </button>
-                          )}
+                        <div key={i} className="flex items-center gap-1 group">
+                          <input
+                            value={skill}
+                            onChange={(e) =>
+                              toggleArrayItem("skills", i, e.target.value)
+                            }
+                            className="w-20 p-2 bg-slate-50 rounded-lg text-[9px] font-black border border-slate-200"
+                            autoFocus
+                          />
+                          <button
+                            onClick={() => removeArrayItem("skills", i)}
+                            className="text-slate-300 hover:text-red-500 font-bold opacity-0 group-hover:opacity-100 transition-all"
+                          >
+                            ×
+                          </button>
                         </div>
                       ))}
                     </div>
@@ -714,7 +746,9 @@ const MAX_AVATAR_BYTES = 5_000_000;
               <div className="lg:col-span-2 space-y-8">
                 <div className="bg-white rounded-[3rem] p-10 shadow-sm border border-slate-50">
                   <h3 className="text-2xl font-black text-slate-900 mb-8 flex items-center gap-4">
-                    <span className="bg-mcgill-red text-white p-2 rounded-xl text-lg">❤️</span>
+                    <span className="bg-mcgill-red text-white p-2 rounded-xl text-lg">
+                      ❤️
+                    </span>
                     Saved & Hearted
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -728,7 +762,9 @@ const MAX_AVATAR_BYTES = 5_000_000;
                             <span className="text-[9px] font-black text-mcgill-red uppercase tracking-widest mb-1 block">
                               {item.type}
                             </span>
-                            <h5 className="font-bold text-slate-900">{item.title}</h5>
+                            <h5 className="font-bold text-slate-900">
+                              {item.title}
+                            </h5>
                           </div>
                           <button
                             onClick={() =>
@@ -752,12 +788,16 @@ const MAX_AVATAR_BYTES = 5_000_000;
 
                 <div className="bg-white rounded-[3rem] p-10 shadow-sm border border-slate-50">
                   <h3 className="text-2xl font-black text-slate-900 mb-8 flex items-center gap-4">
-                    <span className="bg-indigo-600 text-white p-2 rounded-xl text-lg">📡</span>
+                    <span className="bg-indigo-600 text-white p-2 rounded-xl text-lg">
+                      📡
+                    </span>
                     Your Campus Broadcasts
                   </h3>
 
                   <div className="space-y-4">
-                    {collabRequests.filter((r) => r.creatorId === userProfile.id).length > 0 ? (
+                    {collabRequests.filter(
+                      (r) => r.creatorId === userProfile.id,
+                    ).length > 0 ? (
                       collabRequests
                         .filter((r) => r.creatorId === userProfile.id)
                         .map((req) => (
@@ -775,7 +815,8 @@ const MAX_AVATAR_BYTES = 5_000_000;
 
                               <div className="flex items-center gap-4">
                                 <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">
-                                  {req.participants.length} / {req.targetGroupSize} Interested
+                                  {req.participants.length} /{" "}
+                                  {req.targetGroupSize} Interested
                                 </p>
                                 {req.participants.length > 0 && (
                                   <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
@@ -783,10 +824,19 @@ const MAX_AVATAR_BYTES = 5_000_000;
                               </div>
                             </div>
                             <button
-                              onClick={() => setCollabRequests((prev) => prev.filter((r) => r.id !== req.id))}
+                              onClick={() =>
+                                setCollabRequests((prev) =>
+                                  prev.filter((r) => r.id !== req.id),
+                                )
+                              }
                               className="text-slate-300 hover:text-red-500 transition-colors"
                             >
-                              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg
+                                className="w-6 h-6"
+                                fill="none"
+                                stroke="currentColor"
+                                viewBox="0 0 24 24"
+                              >
                                 <path
                                   strokeLinecap="round"
                                   strokeLinejoin="round"
@@ -799,7 +849,8 @@ const MAX_AVATAR_BYTES = 5_000_000;
                         ))
                     ) : (
                       <div className="py-12 text-center text-slate-400 italic font-medium">
-                        You haven't sent any broadcasts. Click the + button below to start!
+                        You haven't sent any broadcasts. Click the + button
+                        below to start!
                       </div>
                     )}
                   </div>
@@ -820,13 +871,6 @@ const MAX_AVATAR_BYTES = 5_000_000;
         );
     }
   };
-
-  
-
-
-
-
-
 
   return (
     <div className="min-h-screen lg:flex bg-gradient-to-br from-[#6A0B17] via-[#B5122A] to-[#ED1B2F]">
@@ -871,7 +915,12 @@ const MAX_AVATAR_BYTES = 5_000_000;
             stroke="currentColor"
             viewBox="0 0 24 24"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 4v16m8-8H4"></path>
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="3"
+              d="M12 4v16m8-8H4"
+            ></path>
           </svg>
           <span className="absolute right-24 bg-slate-900 text-white px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-xl">
             New Broadcast
@@ -896,36 +945,44 @@ const MAX_AVATAR_BYTES = 5_000_000;
                   onClick={() => setIsCollabModalOpen(false)}
                   className="text-slate-200 hover:text-slate-900 transition-colors"
                 >
-                  <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"></path>
+                  <svg
+                    className="w-10 h-10"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2.5"
+                      d="M6 18L18 6M6 6l12 12"
+                    ></path>
                   </svg>
                 </button>
               </div>
 
               <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
-                Broadcast Type
-              </label>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
+                  Broadcast Type
+                </label>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                {CREATE_TYPES.map((t) => (
-                  <button
-                    key={t.id}
-                    type="button"
-                    onClick={() => setNewReqType(t.id)}
-                    className={`p-4 rounded-2xl text-left text-[10px] font-black transition-all border-2 ${
-                      newReqType === t.id
-                        ? "border-mcgill-red bg-red-50 text-mcgill-red shadow-md"
-                        : "border-slate-50 bg-slate-50 text-slate-500 hover:border-slate-100"
-                    }`}
-                  >
-                    {t.label}
-                  </button>
-                ))}
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {CREATE_TYPES.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setNewReqType(t.id)}
+                      className={`p-4 rounded-2xl text-left text-[10px] font-black transition-all border-2 ${
+                        newReqType === t.id
+                          ? "border-mcgill-red bg-red-50 text-mcgill-red shadow-md"
+                          : "border-slate-50 bg-slate-50 text-slate-500 hover:border-slate-100"
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
               </div>
-            </div>
-
-
 
               {/* olivia */}
 
@@ -950,38 +1007,33 @@ const MAX_AVATAR_BYTES = 5_000_000;
                 />
               </div>
 
-
-
-
-              <div className="mt-12 space-y-10">
-
-              </div>
+              <div className="mt-12 space-y-10"></div>
               {newReqType === DiscoveryType.COLLAB_REQUEST && (
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
-                  What's the goal?
-                </label>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {COLLAB_GOALS.map((g) => (
-                    <button
-                      key={g}
-                      type="button"
-                      onClick={() => setNewReqGoal(g)}
-                      className={`p-4 rounded-2xl text-left text-[10px] font-black transition-all border-2 ${
-                        newReqGoal === g
-                          ? "border-mcgill-red bg-red-50 text-mcgill-red shadow-md"
-                          : "border-slate-50 bg-slate-50 text-slate-500 hover:border-slate-100"
-                      }`}
-                    >
-                      {g}
-                    </button>
-                  ))}
+                <div>
+                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
+                    What's the goal?
+                  </label>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {COLLAB_GOALS.map((g) => (
+                      <button
+                        key={g}
+                        type="button"
+                        onClick={() => setNewReqGoal(g)}
+                        className={`p-4 rounded-2xl text-left text-[10px] font-black transition-all border-2 ${
+                          newReqGoal === g
+                            ? "border-mcgill-red bg-red-50 text-mcgill-red shadow-md"
+                            : "border-slate-50 bg-slate-50 text-slate-500 hover:border-slate-100"
+                        }`}
+                      >
+                        {g}
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-                {/* olivia */}
-                {needsDetails && (
+              {/* olivia */}
+              {needsDetails && (
                 <div>
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
                     Event Description
@@ -995,39 +1047,37 @@ const MAX_AVATAR_BYTES = 5_000_000;
                 </div>
               )}
 
-
               {/* olivia */}
               {needsDetails && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
-                    Date
-                  </label>
-                  <input
-                    type="date"
-                    value={eventDate}
-                    onChange={(e) => setEventDate(e.target.value)}
-                    className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-3xl font-bold outline-none focus:border-red-100 transition-all"
-                  />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
+                      Date
+                    </label>
+                    <input
+                      type="date"
+                      value={eventDate}
+                      onChange={(e) => setEventDate(e.target.value)}
+                      className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-3xl font-bold outline-none focus:border-red-100 transition-all"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
+                      Time
+                    </label>
+                    <input
+                      type="time"
+                      value={eventTime}
+                      onChange={(e) => setEventTime(e.target.value)}
+                      className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-3xl font-bold outline-none focus:border-red-100 transition-all"
+                    />
+                  </div>
                 </div>
+              )}
 
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
-                    Time
-                  </label>
-                  <input
-                    type="time"
-                    value={eventTime}
-                    onChange={(e) => setEventTime(e.target.value)}
-                    className="w-full p-5 bg-slate-50 border-2 border-slate-50 rounded-3xl font-bold outline-none focus:border-red-100 transition-all"
-                  />
-                </div>
-              </div>
-            )}
-
-
-                {/* olivia */}
-                {newReqType === DiscoveryType.COLLAB_REQUEST && (
+              {/* olivia */}
+              {newReqType === DiscoveryType.COLLAB_REQUEST && (
                 <div>
                   <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
                     Target Team Size
@@ -1051,15 +1101,14 @@ const MAX_AVATAR_BYTES = 5_000_000;
                 </div>
               )}
 
-
-                <button
-                  onClick={submitRequest}
-                  className="w-full mt-10 py-6 bg-slate-900 text-white font-black text-lg rounded-[2.5rem] shadow-2xl hover:bg-slate-800 transition-all transform active:scale-95"
-                >
-                  Send Broadcast
-                </button>
-              </div>
+              <button
+                onClick={submitRequest}
+                className="w-full mt-10 py-6 bg-slate-900 text-white font-black text-lg rounded-[2.5rem] shadow-2xl hover:bg-slate-800 transition-all transform active:scale-95"
+              >
+                Send Broadcast
+              </button>
             </div>
+          </div>
         )}
       </main>
     </div>

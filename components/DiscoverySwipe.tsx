@@ -41,6 +41,7 @@ const MOCK_DATA: DiscoveryItem[] = [
       "https://images.unsplash.com/photo-1573164713988-8665fc963095?auto=format&fit=crop&q=80&w=800",
     tags: ["Networking", "Internship", "Tech"],
     company: "Google Cloud Canada",
+    date: "2026-02-19",
   },
   {
     id: "e1",
@@ -48,7 +49,7 @@ const MOCK_DATA: DiscoveryItem[] = [
     title: "Frosh Orientation 2026",
     description: "Welcome week activities and meetups for new students.",
     image:
-      "https://images.unsplash.com/photo-1523050854058-8df90110c9f1?auto=format&fit=crop&q=80&w=800",
+      "https://images.unsplash.com/photo-1527529482837-4698179dc6ce?auto=format&fit=crop&q=80&w=800",
     tags: ["Frosh", "Orientation", "Social"],
     metadata: { date: "2026-02-08", organizer: "Student Life" },
     company: "McGill Orientation",
@@ -61,7 +62,7 @@ const MOCK_DATA: DiscoveryItem[] = [
     description:
       "Formal banquet for students and alumni — networking and awards.",
     image:
-      "https://images.unsplash.com/photo-1542826438-0c9a8b9d2e9b?auto=format&fit=crop&q=80&w=800",
+      "https://images.unsplash.com/photo-1504384308090-c894fdcc538d?auto=format&fit=crop&q=80&w=800",
     tags: ["Banquet", "Networking", "Formal"],
     metadata: { date: "2026-03-01", organizer: "Alumni Office" },
     company: "McGill Alumni",
@@ -239,11 +240,15 @@ const DiscoverySwipe: React.FC<DiscoverySwipeProps> = ({
     currentItem?.metadata?.date ||
     currentItem?.metadata?.startDate;
   const formattedEventDate = eventDateRaw
-    ? new Date(eventDateRaw).toLocaleDateString(undefined, {
-        month: "short",
-        day: "numeric",
-        year: "numeric",
-      })
+    ? (() => {
+        const [year, month, day] = eventDateRaw.split("-").map(Number);
+        const date = new Date(year, month - 1, day);
+        return date.toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        });
+      })()
     : null;
 
   useEffect(() => {
@@ -632,6 +637,20 @@ const DiscoverySwipe: React.FC<DiscoverySwipeProps> = ({
                   const evt = combinedData.find(
                     (i) => i.id === modalSubject.id,
                   );
+                  const eventDate = evt?.date || evt?.metadata?.date;
+                  const formattedEventDate = eventDate
+                    ? (() => {
+                        const [year, month, day] = eventDate
+                          .split("-")
+                          .map(Number);
+                        const date = new Date(year, month - 1, day);
+                        return date.toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        });
+                      })()
+                    : "TBA";
                   const related = combinedData.filter(
                     (i) =>
                       (i.company &&
@@ -652,7 +671,7 @@ const DiscoverySwipe: React.FC<DiscoverySwipeProps> = ({
                             {evt.description}
                           </div>
                           <div className="text-sm text-slate-500 mb-4">
-                            Date: {evt.metadata?.date || evt.date || "TBA"}
+                            Date: {formattedEventDate}
                           </div>
                         </div>
                       ) : (
