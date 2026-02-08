@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from "react";
 import Navigation from "./components/Navigation";
 import DiscoverySwipe from "./components/DiscoverySwipe";
-import Calendar from "./components/Calendar";
 import AICoach from "./components/AICoach";
 import Onboarding from "./components/Onboarding";
 import Welcome from "./components/Welcome";
@@ -9,13 +8,18 @@ import { generateRecommendations } from "./services/gemini";
 import { DiscoveryItem, DiscoveryType, CollabRequest } from "./types";
 import type { UserProfile } from "./types";
 
+
 const ACCOUNTS_KEY = "uc_accounts";
 const ACTIVE_ACCOUNT_KEY = "uc_active_account";
 const savedAccounts = localStorage.getItem(ACCOUNTS_KEY);
 const GLOBAL_COLLABS_KEY = "uc_global_collabs";
 
+
 const profileKey = (id: string) => `uc_profile_${id}`;
 const heartsKey = (id: string) => `uc_hearted_${id}`;
+
+
+
 
 type Account = { id: string; name: string; createdAt: number };
 
@@ -61,6 +65,7 @@ const CREATE_TYPES = [
   // { id: DiscoveryType.COURSE, label: "Course" }, // only if you support this type in your enum
 ] as const;
 
+
 const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState("discover");
 
@@ -77,11 +82,9 @@ const App: React.FC = () => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
 
-  const [newReqType, setNewReqType] = useState<DiscoveryType>(
-    DiscoveryType.COLLAB_REQUEST,
-  );
+  const [newReqType, setNewReqType] = useState<DiscoveryType>(DiscoveryType.COLLAB_REQUEST);
 
-  const MAX_AVATAR_BYTES = 5_000_000;
+const MAX_AVATAR_BYTES = 5_000_000; 
 
   const handleAvatarFile = (file: File | null) => {
     if (!file) return;
@@ -99,14 +102,14 @@ const App: React.FC = () => {
     const reader = new FileReader();
     reader.onload = () => {
       const dataUrl = reader.result as string;
-      setUserProfile((prev) => (prev ? { ...prev, avatar: dataUrl } : prev));
+      setUserProfile(prev => (prev ? { ...prev, avatar: dataUrl } : prev));
     };
-    reader.onerror = () =>
-      alert("Could not read that file. Try another image.");
+    reader.onerror = () => alert("Could not read that file. Try another image.");
     reader.readAsDataURL(file);
   };
 
-  const defaultImageFor = (t: DiscoveryType) => {
+
+    const defaultImageFor = (t: DiscoveryType) => {
     switch (t) {
       case DiscoveryType.COLLAB_REQUEST:
       case DiscoveryType.PARTNER:
@@ -220,57 +223,56 @@ const App: React.FC = () => {
     return () => window.removeEventListener("storage", onStorage);
   }, []);
 
+
   useEffect(() => {
-    if (!userProfile || !activeAccountId) return;
+  if (!userProfile || !activeAccountId) return;
 
-    if (userProfile.id !== activeAccountId) return;
+  if (userProfile.id !== activeAccountId) return;
 
-    setAccounts((prev) => {
-      const current = prev.find((a) => a.id === activeAccountId);
-      if (!current) return prev;
+  setAccounts(prev => {
+    const current = prev.find(a => a.id === activeAccountId);
+    if (!current) return prev;
 
-      if (current.name === userProfile.name) return prev;
+   
+    if (current.name === userProfile.name) return prev;
 
-      const updated = prev.map((acc) =>
-        acc.id === activeAccountId ? { ...acc, name: userProfile.name } : acc,
-      );
+    const updated = prev.map(acc =>
+      acc.id === activeAccountId ? { ...acc, name: userProfile.name } : acc
+    );
 
-      localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(updated));
-      return updated;
-    });
-  }, [userProfile?.name, userProfile?.id, activeAccountId]);
+    localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(updated));
+    return updated;
+  });
+}, [userProfile?.name, userProfile?.id, activeAccountId]);
+
+
+
+
 
   // Persist profile
   useEffect(() => {
     if (!activeAccountId || !userProfile) return;
-    localStorage.setItem(
-      profileKey(activeAccountId),
-      JSON.stringify(userProfile),
-    );
+    localStorage.setItem(profileKey(activeAccountId), JSON.stringify(userProfile));
   }, [activeAccountId, userProfile]);
 
   // Persist hearts
   useEffect(() => {
     if (!activeAccountId) return;
-    localStorage.setItem(
-      heartsKey(activeAccountId),
-      JSON.stringify(heartedItems),
-    );
+    localStorage.setItem(heartsKey(activeAccountId), JSON.stringify(heartedItems));
   }, [activeAccountId, heartedItems]);
 
   // Persist collabs
   useEffect(() => {
-    localStorage.setItem(GLOBAL_COLLABS_KEY, JSON.stringify(collabRequests));
-  }, [collabRequests]);
+  localStorage.setItem(GLOBAL_COLLABS_KEY, JSON.stringify(collabRequests));
+}, [collabRequests]);
+
 
   // Fetch recs
   useEffect(() => {
     if (!userProfile) return;
     const fetchRecs = async () => {
       if (userProfile.interests.length > 0) {
-        const suggestions = await generateRecommendations(
-          userProfile.interests,
-        );
+        const suggestions = await generateRecommendations(userProfile.interests);
         setRecs(suggestions);
       }
     };
@@ -289,33 +291,31 @@ const App: React.FC = () => {
   };
 
   const submitRequest = () => {
-    if (!userProfile) return;
+  if (!userProfile) return;
 
-    const title =
-      newReqTitle ||
-      (newReqType === DiscoveryType.COLLAB_REQUEST
-        ? newReqGoal
-        : "New Broadcast");
+  const title =
+    newReqTitle ||
+    (newReqType === DiscoveryType.COLLAB_REQUEST ? newReqGoal : "New Broadcast");
 
-    const newItem: CollabRequest = {
-      id: `req_${Date.now()}`,
-      type: newReqType,
-      title,
-      description: `Posted by ${userProfile.name}.`,
-      tags: [userProfile.major, "Collaboration"],
-      creatorId: userProfile.id,
-      targetGroupSize:
-        newReqType === DiscoveryType.COLLAB_REQUEST ? newReqSize : undefined,
-      participants: [],
-      image: defaultImageFor(newReqType), // ✅ make sure your type supports this field (see note below)
-    };
-
-    setCollabRequests((prev) => [newItem, ...prev]); // prepend feels better
-    setIsCollabModalOpen(false);
-    setNewReqTitle("");
-    setNewReqType(DiscoveryType.COLLAB_REQUEST);
-    setActiveTab("discover");
+  const newItem: CollabRequest = {
+    id: `req_${Date.now()}`,
+    type: newReqType,
+    title,
+    description: `Posted by ${userProfile.name}.`,
+    tags: [userProfile.major, "Collaboration"],
+    creatorId: userProfile.id,
+    targetGroupSize: newReqType === DiscoveryType.COLLAB_REQUEST ? newReqSize : undefined,
+    participants: [],
+    image: defaultImageFor(newReqType), // ✅ make sure your type supports this field (see note below)
   };
+
+  setCollabRequests((prev) => [newItem, ...prev]); // prepend feels better
+  setIsCollabModalOpen(false);
+  setNewReqTitle("");
+  setNewReqType(DiscoveryType.COLLAB_REQUEST);
+  setActiveTab("discover");
+};
+
 
   const onToggleInterested = (requestId: string) => {
     if (!activeAccountId) return;
@@ -324,9 +324,7 @@ const App: React.FC = () => {
       const next = prev.map((r) => {
         if (r.id !== requestId) return r;
 
-        const participants = Array.isArray(r.participants)
-          ? r.participants
-          : [];
+        const participants = Array.isArray(r.participants) ? r.participants : [];
         const already = participants.includes(activeAccountId);
 
         return {
@@ -343,10 +341,11 @@ const App: React.FC = () => {
     });
   };
 
+
   const toggleArrayItem = (
     field: "skills" | "experience",
     index: number,
-    value: string,
+    value: string
   ) => {
     setUserProfile((prev) => {
       if (!prev) return prev;
@@ -358,7 +357,7 @@ const App: React.FC = () => {
 
   const addArrayItem = (field: "skills" | "experience") => {
     setUserProfile((prev) =>
-      prev ? { ...prev, [field]: [...prev[field], ""] } : prev,
+      prev ? { ...prev, [field]: [...prev[field], ""] } : prev
     );
   };
 
@@ -366,7 +365,7 @@ const App: React.FC = () => {
     setUserProfile((prev) =>
       prev
         ? { ...prev, [field]: prev[field].filter((_, i) => i !== index) }
-        : prev,
+        : prev
     );
   };
 
@@ -390,8 +389,7 @@ const App: React.FC = () => {
   }
 
   if (!userProfile) return null;
-  if (!onboardingComplete)
-    return <Onboarding onComplete={handleOnboardingComplete} />;
+  if (!onboardingComplete) return <Onboarding onComplete={handleOnboardingComplete} />;
 
   const renderContent = () => {
     switch (activeTab) {
@@ -418,7 +416,7 @@ const App: React.FC = () => {
           </div>
         );
       case "coach":
-        return <AICoach />;
+        return <AICoach heartedItems={heartedItems} />;
       case "community":
         return (
           <div className="p-6 lg:p-12 pb-32 animate-in fade-in duration-500 max-w-6xl mx-auto">
@@ -441,42 +439,12 @@ const App: React.FC = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-16">
                   {[
-                    {
-                      name: "SSMU Club Fair",
-                      type: "Event",
-                      date: "Sept 14",
-                      color: "bg-indigo-500",
-                    },
-                    {
-                      name: "McGill Outdoors Club",
-                      type: "Community",
-                      date: "Active Now",
-                      color: "bg-emerald-500",
-                    },
-                    {
-                      name: "Gerts Student Bar",
-                      type: "Venue",
-                      date: "Open 4pm",
-                      color: "bg-amber-500",
-                    },
-                    {
-                      name: "Desautels Networking",
-                      type: "Career",
-                      date: "Oct 02",
-                      color: "bg-rose-500",
-                    },
-                    {
-                      name: "Redpath Study Group",
-                      type: "Academic",
-                      date: "Ongoing",
-                      color: "bg-sky-500",
-                    },
-                    {
-                      name: "Daily Martlet Fans",
-                      type: "Athletics",
-                      date: "Saturday",
-                      color: "bg-mcgill-red",
-                    },
+                    { name: "SSMU Club Fair", type: "Event", date: "Sept 14", color: "bg-indigo-500" },
+                    { name: "McGill Outdoors Club", type: "Community", date: "Active Now", color: "bg-emerald-500" },
+                    { name: "Gerts Student Bar", type: "Venue", date: "Open 4pm", color: "bg-amber-500" },
+                    { name: "Desautels Networking", type: "Career", date: "Oct 02", color: "bg-rose-500" },
+                    { name: "Redpath Study Group", type: "Academic", date: "Ongoing", color: "bg-sky-500" },
+                    { name: "Daily Martlet Fans", type: "Athletics", date: "Saturday", color: "bg-mcgill-red" },
                   ].map((item) => (
                     <div
                       key={item.name}
@@ -522,25 +490,6 @@ const App: React.FC = () => {
           </div>
         );
 
-      case "calendar":
-        return (
-          <div className="p-6 lg:p-12 pb-32 animate-in fade-in duration-500">
-            <header className="mb-12 max-w-6xl mx-auto">
-              <span className="text-xs font-bold text-white uppercase tracking-[0.3em] mb-2 block">
-                Your Schedule
-              </span>
-              <h2 className="text-4xl lg:text-5xl font-black text-white tracking-tight">
-                Event Calendar
-              </h2>
-            </header>
-            <Calendar
-              savedItems={heartedItems}
-              allItems={collabRequests}
-              onSaveItem={handleHeart}
-            />
-          </div>
-        );
-
       case "profile":
         return (
           <div className="p-8 lg:p-16 pb-32 max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -554,106 +503,94 @@ const App: React.FC = () => {
                         userProfile.avatar?.trim()
                           ? userProfile.avatar
                           : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
-                              userProfile.name || "McGill Student",
+                              userProfile.name || "McGill Student"
                             )}`
                       }
-                      alt="Profile"
+                      alt="Profile" 
                       className="w-full h-full object-cover"
                     />
+
                   </div>
                 </div>
 
                 {isEditingProfile ? (
-                  <div className="w-full space-y-4">
-                    {/* Name */}
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-400 uppercase text-left mb-1 ml-2">
-                        Name
-                      </label>
-                      <input
-                        value={userProfile.name}
-                        onChange={(e) =>
-                          setUserProfile({
-                            ...userProfile,
-                            name: e.target.value,
-                          })
-                        }
-                        className="w-full p-3 bg-slate-50 rounded-xl font-bold"
-                      />
-                    </div>
+                    <div className="w-full space-y-4">
+                      {/* Name */}
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase text-left mb-1 ml-2">
+                          Name
+                        </label>
+                        <input
+                          value={userProfile.name}
+                          onChange={(e) => setUserProfile({ ...userProfile, name: e.target.value })}
+                          className="w-full p-3 bg-slate-50 rounded-xl font-bold"
+                        />
+                      </div>
 
-                    {/* GPA */}
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-400 uppercase text-left mb-1 ml-2">
-                        GPA
-                      </label>
-                      <input
-                        value={userProfile.gpa}
-                        onChange={(e) =>
-                          setUserProfile({
-                            ...userProfile,
-                            gpa: e.target.value,
-                          })
-                        }
-                        className="w-full p-3 bg-slate-50 rounded-xl font-bold"
-                        placeholder="e.g. 4.0"
-                      />
-                    </div>
+                      {/* GPA */}
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase text-left mb-1 ml-2">
+                          GPA
+                        </label>
+                        <input
+                          value={userProfile.gpa}
+                          onChange={(e) => setUserProfile({ ...userProfile, gpa: e.target.value })}
+                          className="w-full p-3 bg-slate-50 rounded-xl font-bold"
+                          placeholder="e.g. 4.0"
+                        />
+                      </div>
 
-                    {/* Profile picture */}
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-400 uppercase text-left mb-1 ml-2">
-                        Profile picture
-                      </label>
+                      {/* Profile picture */}
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase text-left mb-1 ml-2">
+                          Profile picture
+                        </label>
 
-                      <input
-                        type="file"
-                        accept="image/*"
-                        onChange={(e) =>
-                          handleAvatarFile(e.target.files?.[0] ?? null)
-                        }
-                        className="w-full p-3 bg-slate-50 rounded-xl font-bold"
-                      />
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleAvatarFile(e.target.files?.[0] ?? null)}
+                          className="w-full p-3 bg-slate-50 rounded-xl font-bold"
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setUserProfile((prev) => (prev ? { ...prev, avatar: "" } : prev))
+                          }
+                          className="w-full mt-3 py-3 bg-white border border-slate-200 rounded-xl text-[9px] font-black text-slate-400 hover:text-mcgill-red hover:border-mcgill-red transition-all uppercase"
+                        >
+                          Remove photo
+                        </button>
+                      </div>
 
                       <button
-                        type="button"
-                        onClick={() =>
-                          setUserProfile((prev) =>
-                            prev ? { ...prev, avatar: "" } : prev,
-                          )
-                        }
-                        className="w-full mt-3 py-3 bg-white border border-slate-200 rounded-xl text-[9px] font-black text-slate-400 hover:text-mcgill-red hover:border-mcgill-red transition-all uppercase"
+                        onClick={() => setIsEditingProfile(false)}
+                        className="w-full py-4 bg-mcgill-red text-white rounded-2xl font-black uppercase text-xs shadow-lg"
                       >
-                        Remove photo
+                        Save Profile
                       </button>
                     </div>
+                  ) : (
 
-                    <button
-                      onClick={() => setIsEditingProfile(false)}
-                      className="w-full py-4 bg-mcgill-red text-white rounded-2xl font-black uppercase text-xs shadow-lg"
-                    >
-                      Save Profile
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-1">
-                      {userProfile.name}
-                    </h2>
-                    <p className="text-mcgill-red font-black text-sm uppercase tracking-widest mb-2">
-                      {userProfile.major}
-                    </p>
-                    <p className="text-slate-400 font-bold text-xs mb-8 italic">
-                      GPA: {userProfile.gpa}
-                    </p>
-                    <button
-                      onClick={() => setIsEditingProfile(true)}
-                      className="px-8 py-3 bg-slate-100 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-200 transition-all"
-                    >
-                      Edit Experience & Stats
-                    </button>
-                  </>
-                )}
+                    <>
+                      <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-1">
+                        {userProfile.name}
+                      </h2>
+                      <p className="text-mcgill-red font-black text-sm uppercase tracking-widest mb-2">
+                        {userProfile.major}
+                      </p>
+                      <p className="text-slate-400 font-bold text-xs mb-8 italic">
+                        GPA: {userProfile.gpa}
+                      </p>
+                      <button
+                        onClick={() => setIsEditingProfile(true)}
+                        className="px-8 py-3 bg-slate-100 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-200 transition-all"
+                      >
+                        Edit Experience & Stats
+                      </button>
+                    </>
+                  )}
 
                 {/* API Health Check */}
                 <div className="mt-8 w-full p-5 bg-slate-50 rounded-3xl border border-slate-100">
@@ -793,7 +730,7 @@ const App: React.FC = () => {
                           <button
                             onClick={() =>
                               setHeartedItems((prev) =>
-                                prev.filter((h) => h.id !== item.id),
+                                prev.filter((h) => h.id !== item.id)
                               )
                             }
                             className="mt-4 text-[10px] font-bold text-slate-400 hover:text-red-500 transition-colors uppercase tracking-widest"
@@ -820,9 +757,8 @@ const App: React.FC = () => {
                   </h3>
 
                   <div className="space-y-4">
-                    {collabRequests.filter(
-                      (r) => r.creatorId === userProfile.id,
-                    ).length > 0 ? (
+                    {collabRequests.filter((r) => r.creatorId === userProfile.id)
+                      .length > 0 ? (
                       collabRequests
                         .filter((r) => r.creatorId === userProfile.id)
                         .map((req) => (
@@ -847,7 +783,7 @@ const App: React.FC = () => {
                             <button
                               onClick={() =>
                                 setCollabRequests((prev) =>
-                                  prev.filter((r) => r.id !== req.id),
+                                  prev.filter((r) => r.id !== req.id)
                                 )
                               }
                               className="text-slate-300 hover:text-red-500 transition-colors"
@@ -870,8 +806,7 @@ const App: React.FC = () => {
                         ))
                     ) : (
                       <div className="py-12 text-center text-slate-400 italic font-medium">
-                        You haven't sent any broadcasts. Click the + button
-                        below to start!
+                        You haven't sent any broadcasts. Click the + button below to start!
                       </div>
                     )}
                   </div>
@@ -892,6 +827,13 @@ const App: React.FC = () => {
         );
     }
   };
+
+  
+
+
+
+
+
 
   return (
     <div className="min-h-screen lg:flex bg-gradient-to-br from-[#6A0B17] via-[#B5122A] to-[#ED1B2F]">
@@ -990,27 +932,29 @@ const App: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
-                  Broadcast Type
-                </label>
+              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">
+                Broadcast Type
+              </label>
 
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {CREATE_TYPES.map((t) => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => setNewReqType(t.id)}
-                      className={`p-4 rounded-2xl text-left text-[10px] font-black transition-all border-2 ${
-                        newReqType === t.id
-                          ? "border-mcgill-red bg-red-50 text-mcgill-red shadow-md"
-                          : "border-slate-50 bg-slate-50 text-slate-500 hover:border-slate-100"
-                      }`}
-                    >
-                      {t.label}
-                    </button>
-                  ))}
-                </div>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                {CREATE_TYPES.map((t) => (
+                  <button
+                    key={t.id}
+                    type="button"
+                    onClick={() => setNewReqType(t.id)}
+                    className={`p-4 rounded-2xl text-left text-[10px] font-black transition-all border-2 ${
+                      newReqType === t.id
+                        ? "border-mcgill-red bg-red-50 text-mcgill-red shadow-md"
+                        : "border-slate-50 bg-slate-50 text-slate-500 hover:border-slate-100"
+                    }`}
+                  >
+                    {t.label}
+                  </button>
+                ))}
               </div>
+            </div>
+
+
 
               <div className="space-y-8">
                 <div>
