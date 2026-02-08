@@ -5,14 +5,21 @@ import AICoach from "./components/AICoach";
 import Onboarding from "./components/Onboarding";
 import Welcome from "./components/Welcome";
 import { generateRecommendations } from "./services/gemini";
-import { DiscoveryItem, DiscoveryType, CollabRequest, UserProfile } from "./types";
+import { DiscoveryItem, DiscoveryType, CollabRequest } from "./types";
+import type { UserProfile } from "./types";
+
 
 const ACCOUNTS_KEY = "uc_accounts";
 const ACTIVE_ACCOUNT_KEY = "uc_active_account";
+const savedAccounts = localStorage.getItem(ACCOUNTS_KEY);
+const GLOBAL_COLLABS_KEY = "uc_global_collabs";
+
 
 const profileKey = (id: string) => `uc_profile_${id}`;
 const heartsKey = (id: string) => `uc_hearted_${id}`;
-const collabsKey = (id: string) => `uc_collabs_${id}`;
+
+
+
 
 type Account = { id: string; name: string; createdAt: number };
 
@@ -65,6 +72,30 @@ const App: React.FC = () => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
 
+const MAX_AVATAR_BYTES = 5_000_000; 
+
+  const handleAvatarFile = (file: File | null) => {
+    if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      alert("Please upload an image file (PNG/JPG/WebP).");
+      return;
+    }
+
+    if (file.size > MAX_AVATAR_BYTES) {
+      alert("That image is too large. Try one under ~5MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setUserProfile(prev => (prev ? { ...prev, avatar: dataUrl } : prev));
+    };
+    reader.onerror = () => alert("Could not read that file. Try another image.");
+    reader.readAsDataURL(file);
+  };
+
   // Discovery & Hearting State
   const [heartedItems, setHeartedItems] = useState<DiscoveryItem[]>([]);
   const [collabRequests, setCollabRequests] = useState<CollabRequest[]>([]);
@@ -80,6 +111,8 @@ const App: React.FC = () => {
 
   // Load accounts
   useEffect(() => {
+    const c = localStorage.getItem(GLOBAL_COLLABS_KEY);
+    setCollabRequests(c ? JSON.parse(c) : []);
     const savedAccounts = localStorage.getItem(ACCOUNTS_KEY);
     const savedActive = localStorage.getItem(ACTIVE_ACCOUNT_KEY);
 
@@ -92,7 +125,7 @@ const App: React.FC = () => {
       const id = makeAccountId();
       const defaultAcc: Account = {
         id,
-        name: "McGill Student",
+        name: "New User",
         createdAt: Date.now(),
       };
       localStorage.setItem(ACCOUNTS_KEY, JSON.stringify([defaultAcc]));
@@ -119,7 +152,7 @@ const App: React.FC = () => {
 
     const p = localStorage.getItem(profileKey(activeAccountId));
     const h = localStorage.getItem(heartsKey(activeAccountId));
-    const c = localStorage.getItem(collabsKey(activeAccountId));
+    const c = localStorage.getItem(GLOBAL_COLLABS_KEY);
 
     if (p) {
       setUserProfile(JSON.parse(p));
@@ -129,9 +162,7 @@ const App: React.FC = () => {
       // No profile yet => start onboarding for this account
       setUserProfile({
         id: activeAccountId,
-        name:
-          accounts.find((a) => a.id === activeAccountId)?.name ||
-          "McGill Student",
+        name: "New User",
         major: "",
         interests: [],
         bio: "Prospective high-achiever.",
@@ -148,6 +179,47 @@ const App: React.FC = () => {
     setCollabRequests(c ? JSON.parse(c) : []);
   }, [activeAccountId, accounts]);
 
+  useEffect(() => {
+    const c = localStorage.getItem(GLOBAL_COLLABS_KEY);
+    setCollabRequests(c ? JSON.parse(c) : []);
+  }, []);
+
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === GLOBAL_COLLABS_KEY) {
+        setCollabRequests(e.newValue ? JSON.parse(e.newValue) : []);
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+
+  useEffect(() => {
+  if (!userProfile || !activeAccountId) return;
+
+  if (userProfile.id !== activeAccountId) return;
+
+  setAccounts(prev => {
+    const current = prev.find(a => a.id === activeAccountId);
+    if (!current) return prev;
+
+   
+    if (current.name === userProfile.name) return prev;
+
+    const updated = prev.map(acc =>
+      acc.id === activeAccountId ? { ...acc, name: userProfile.name } : acc
+    );
+
+    localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(updated));
+    return updated;
+  });
+}, [userProfile?.name, userProfile?.id, activeAccountId]);
+
+
+
+
+
   // Persist profile
   useEffect(() => {
     if (!activeAccountId || !userProfile) return;
@@ -162,9 +234,9 @@ const App: React.FC = () => {
 
   // Persist collabs
   useEffect(() => {
-    if (!activeAccountId) return;
-    localStorage.setItem(collabsKey(activeAccountId), JSON.stringify(collabRequests));
-  }, [activeAccountId, collabRequests]);
+  localStorage.setItem(GLOBAL_COLLABS_KEY, JSON.stringify(collabRequests));
+}, [collabRequests]);
+
 
   // Fetch recs
   useEffect(() => {
@@ -365,66 +437,98 @@ const App: React.FC = () => {
                 <div className="mb-8 relative">
                   <div className="w-32 h-32 rounded-full border-[6px] border-slate-50 shadow-2xl overflow-hidden bg-slate-100">
                     <img
-                      src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${userProfile.name}`}
-                      alt="Profile"
+                      src={
+                        userProfile.avatar?.trim()
+                          ? userProfile.avatar
+                          : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
+                              userProfile.name || "McGill Student"
+                            )}`
+                      }
+                      alt="Profile" 
                       className="w-full h-full object-cover"
                     />
+
                   </div>
                 </div>
 
                 {isEditingProfile ? (
-                  <div className="w-full space-y-4">
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-400 uppercase text-left mb-1 ml-2">
-                        Name
-                      </label>
-                      <input
-                        value={userProfile.name}
-                        onChange={(e) =>
-                          setUserProfile({ ...userProfile, name: e.target.value })
-                        }
-                        className="w-full p-3 bg-slate-50 rounded-xl font-bold"
-                      />
+                    <div className="w-full space-y-4">
+                      {/* Name */}
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase text-left mb-1 ml-2">
+                          Name
+                        </label>
+                        <input
+                          value={userProfile.name}
+                          onChange={(e) => setUserProfile({ ...userProfile, name: e.target.value })}
+                          className="w-full p-3 bg-slate-50 rounded-xl font-bold"
+                        />
+                      </div>
+
+                      {/* GPA */}
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase text-left mb-1 ml-2">
+                          GPA
+                        </label>
+                        <input
+                          value={userProfile.gpa}
+                          onChange={(e) => setUserProfile({ ...userProfile, gpa: e.target.value })}
+                          className="w-full p-3 bg-slate-50 rounded-xl font-bold"
+                          placeholder="e.g. 4.0"
+                        />
+                      </div>
+
+                      {/* Profile picture */}
+                      <div>
+                        <label className="block text-[10px] font-black text-slate-400 uppercase text-left mb-1 ml-2">
+                          Profile picture
+                        </label>
+
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => handleAvatarFile(e.target.files?.[0] ?? null)}
+                          className="w-full p-3 bg-slate-50 rounded-xl font-bold"
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setUserProfile((prev) => (prev ? { ...prev, avatar: "" } : prev))
+                          }
+                          className="w-full mt-3 py-3 bg-white border border-slate-200 rounded-xl text-[9px] font-black text-slate-400 hover:text-mcgill-red hover:border-mcgill-red transition-all uppercase"
+                        >
+                          Remove photo
+                        </button>
+                      </div>
+
+                      <button
+                        onClick={() => setIsEditingProfile(false)}
+                        className="w-full py-4 bg-mcgill-red text-white rounded-2xl font-black uppercase text-xs shadow-lg"
+                      >
+                        Save Profile
+                      </button>
                     </div>
-                    <div>
-                      <label className="block text-[10px] font-black text-slate-400 uppercase text-left mb-1 ml-2">
-                        GPA
-                      </label>
-                      <input
-                        value={userProfile.gpa}
-                        onChange={(e) =>
-                          setUserProfile({ ...userProfile, gpa: e.target.value })
-                        }
-                        className="w-full p-3 bg-slate-50 rounded-xl font-bold"
-                        placeholder="e.g. 4.0"
-                      />
-                    </div>
-                    <button
-                      onClick={() => setIsEditingProfile(false)}
-                      className="w-full py-4 bg-mcgill-red text-white rounded-2xl font-black uppercase text-xs shadow-lg"
-                    >
-                      Save Profile
-                    </button>
-                  </div>
-                ) : (
-                  <>
-                    <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-1">
-                      {userProfile.name}
-                    </h2>
-                    <p className="text-mcgill-red font-black text-sm uppercase tracking-widest mb-2">
-                      {userProfile.major}
-                    </p>
-                    <p className="text-slate-400 font-bold text-xs mb-8 italic">
-                      GPA: {userProfile.gpa}
-                    </p>
-                    <button
-                      onClick={() => setIsEditingProfile(true)}
-                      className="px-8 py-3 bg-slate-100 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-200 transition-all"
-                    >
-                      Edit Experience & Stats
-                    </button>
-                  </>
-                )}
+                  ) : (
+
+                    <>
+                      <h2 className="text-3xl font-black text-slate-900 tracking-tight mb-1">
+                        {userProfile.name}
+                      </h2>
+                      <p className="text-mcgill-red font-black text-sm uppercase tracking-widest mb-2">
+                        {userProfile.major}
+                      </p>
+                      <p className="text-slate-400 font-bold text-xs mb-8 italic">
+                        GPA: {userProfile.gpa}
+                      </p>
+                      <button
+                        onClick={() => setIsEditingProfile(true)}
+                        className="px-8 py-3 bg-slate-100 rounded-full text-[10px] font-black uppercase tracking-widest text-slate-500 hover:bg-slate-200 transition-all"
+                      >
+                        Edit Experience & Stats
+                      </button>
+                    </>
+                  )}
 
                 {/* API Health Check */}
                 <div className="mt-8 w-full p-5 bg-slate-50 rounded-3xl border border-slate-100">
@@ -661,6 +765,13 @@ const App: React.FC = () => {
     }
   };
 
+  
+
+
+
+
+
+
   return (
     <div className="min-h-screen lg:flex bg-gradient-to-br from-[#6A0B17] via-[#B5122A] to-[#ED1B2F]">
       <Navigation
@@ -679,9 +790,10 @@ const App: React.FC = () => {
           const id = makeAccountId();
           const newAcc = {
             id,
-            name: `McGill Student ${accounts.length + 1}`,
+            name: "New User",
             createdAt: Date.now(),
           };
+
           const next = [newAcc, ...accounts];
 
           setAccounts(next);
