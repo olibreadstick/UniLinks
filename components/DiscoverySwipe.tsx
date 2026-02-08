@@ -32,27 +32,6 @@ const MOCK_DATA: DiscoveryItem[] = [
     date: "2026-02-14",
   },
   {
-    id: "2",
-    type: DiscoveryType.PARTNER,
-    title: "Sarah Desautels",
-    description: "Looking for a study lead for MGCR 341. Coffee is on me!",
-    image:
-      "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=800",
-    tags: ["Management", "Lab Partner"],
-    creator: {
-      id: "u123",
-      name: "Sarah Desautels",
-      major: "Management",
-      interests: ["Leadership", "Study Groups"],
-      bio: "Third-year student looking for study partners.",
-      avatar:
-        "https://images.unsplash.com/photo-1545996124-1b9d7b0a7f22?auto=format&fit=crop&q=80&w=400",
-      gpa: "3.8",
-      skills: ["coordination"],
-      experience: [],
-    },
-  },
-  {
     id: "n1",
     type: DiscoveryType.NETWORKING,
     title: "Google Cloud Canada",
@@ -99,47 +78,6 @@ const MOCK_DATA: DiscoveryItem[] = [
     metadata: { date: "2026-02-09", organizer: "Campus Events" },
     company: "Campus Events",
     date: "2026-02-09",
-  },
-  {
-    id: "u124",
-    type: DiscoveryType.PARTNER,
-    title: "Alex Brown",
-    description:
-      "Looking for coding study buddies for COMP 250 and hackathons.",
-    image: "",
-    tags: ["COMP", "Study"],
-    creator: {
-      id: "u124",
-      name: "Alex Brown",
-      major: "Computer Science",
-      interests: ["Algorithms", "Hackathons"],
-      bio: "Enthusiastic coder and part-time barista.",
-      avatar:
-        "https://images.unsplash.com/photo-1544005313-94ddf0286df2?auto=format&fit=crop&q=80&w=400",
-      gpa: "3.6",
-      skills: ["JavaScript", "React"],
-      experience: ["Hack McGill 2024"],
-    },
-  },
-  {
-    id: "u125",
-    type: DiscoveryType.PARTNER,
-    title: "Lila Nguyen",
-    description: "Organizing a study group for MGCR 341 and MGCR 222.",
-    image: "",
-    tags: ["MGCR", "Study Group"],
-    creator: {
-      id: "u125",
-      name: "Lila Nguyen",
-      major: "Management",
-      interests: ["Finance", "Clubs"],
-      bio: "Happy to share notes and host study sessions.",
-      avatar:
-        "https://images.unsplash.com/photo-1545996124-1b9d7b0a7f22?auto=format&fit=crop&q=80&w=400",
-      gpa: "3.9",
-      skills: ["Organization"],
-      experience: [],
-    },
   },
   {
     id: "club1",
@@ -242,7 +180,6 @@ const DiscoverySwipe: React.FC<DiscoverySwipeProps> = ({
 
   const [modalOpen, setModalOpen] = useState(false);
 
-  
   const [modalSubject, setModalSubject] = useState<{
     type: "profile" | "company" | "event";
     id: string | null;
@@ -287,17 +224,15 @@ const DiscoverySwipe: React.FC<DiscoverySwipeProps> = ({
     filteredData[currentIndex % (filteredData.length || 1)] || combinedData[0];
 
   const authorName =
-  (currentItem as any)?.creatorName || currentItem.creator?.name;
+    (currentItem as any)?.creatorName || currentItem.creator?.name;
 
-const authorAvatar =
-  (currentItem as any)?.creatorAvatar || currentItem.creator?.avatar;
+  const authorAvatar =
+    (currentItem as any)?.creatorAvatar || currentItem.creator?.avatar;
 
-const authorMajor =
-  (currentItem as any)?.creatorMajor || currentItem.creator?.major;
+  const authorMajor =
+    (currentItem as any)?.creatorMajor || currentItem.creator?.major;
 
-const hasAuthor = Boolean(authorName);
-
-
+  const hasAuthor = Boolean(authorName);
 
   const eventDateRaw =
     currentItem?.date ||
@@ -410,8 +345,10 @@ const hasAuthor = Boolean(authorName);
                   onClick={() =>
                     openSubjectModal(
                       "profile",
-                      (currentItem as any).creatorId || currentItem.creator?.id || null,
-                      authorName
+                      (currentItem as any).creatorId ||
+                        currentItem.creator?.id ||
+                        null,
+                      authorName,
                     )
                   }
                   className="flex items-center gap-3 bg-white/10 backdrop-blur-md rounded-full px-3 py-2 border border-white/10 hover:scale-105 transition-transform"
@@ -421,14 +358,16 @@ const hasAuthor = Boolean(authorName);
                       authorAvatar?.trim()
                         ? authorAvatar
                         : `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
-                            authorName || "Student"
+                            authorName || "Student",
                           )}`
                     }
                     alt={authorName}
                     className="w-10 h-10 rounded-full object-cover"
                   />
                   <div className="text-right">
-                    <div className="text-sm font-black text-white">{authorName}</div>
+                    <div className="text-sm font-black text-white">
+                      {authorName}
+                    </div>
                     <div className="text-[10px] text-slate-200">
                       {authorMajor || "McGill Student"}
                     </div>
@@ -440,7 +379,7 @@ const hasAuthor = Boolean(authorName);
                     openSubjectModal(
                       "company",
                       currentItem.company || currentItem.id,
-                      currentItem.company || currentItem.title
+                      currentItem.company || currentItem.title,
                     )
                   }
                   className="flex items-center gap-3 bg-white/10 backdrop-blur-md rounded-full px-3 py-2 border border-white/10 hover:scale-105 transition-transform"
