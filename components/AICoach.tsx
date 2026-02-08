@@ -1,9 +1,19 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { GoogleGenAI, LiveServerMessage, Modality, Blob } from "@google/genai";
 import { getSocialIcebreakers } from "../services/gemini";
 import { DiscoveryItem, DiscoveryType } from "../types";
 
-const DEFAULT_SCENARIOS = [
+type Scenario = {
+  id: string;
+  title: string;
+  icon: string;
+  desc: string;
+  isCustom?: boolean;
+};
+
+const JOINED_COURSES_STORAGE_KEY = "mcg_joined_courses";
+
+const DEFAULT_SCENARIOS: Scenario[] = [
   {
     id: "networking",
     title: "Desautels Mixer",
@@ -81,38 +91,109 @@ interface AICoachProps {
 }
 
 const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
-  // Generate tailored scenarios from top 3 hearted items
-  const getTailoredScenarios = () => {
-    if (heartedItems.length > 0) {
-      const tailored = heartedItems.slice(0, 3).map((item) => ({
-        id: item.id,
-        title: item.title,
-        icon:
-          item.type === DiscoveryType.EVENT
-            ? "📅"
-            : item.type === DiscoveryType.NETWORKING
-            ? "💼"
-            : item.type === DiscoveryType.PARTNER
-            ? "👥"
-            : "🎯",
-        desc: item.description || `Practice for ${item.title}.`,
-        isCustom: false,
-      }));
-      return tailored;
-    }
-    return [];
-  };
+  const likedItemScenarios: Scenario[] = useMemo(() => {
+    return heartedItems.map((item) => ({
+      id: `like_${item.id}`,
+      title: item.title,
+      icon:
+        item.type === DiscoveryType.EVENT
+          ? "📅"
+          : item.type === DiscoveryType.CLUB
+          ? "🏛️"
+          : item.type === DiscoveryType.PARTNER
+          ? "👤"
+          : item.type === DiscoveryType.COURSE
+          ? "📚"
+          : item.type === DiscoveryType.NETWORKING
+          ? "🤝"
+          : item.type === DiscoveryType.COLLAB_REQUEST
+          ? "🧩"
+          : "❤️",
+      desc: item.description || `Practice for ${item.title}.`,
+      isCustom: false,
+    }));
+  }, [heartedItems]);
 
-  const tailoredScenarios = getTailoredScenarios();
-  const allScenarios = tailoredScenarios.length > 0 ? tailoredScenarios : DEFAULT_SCENARIOS;
+  const [joinedCourses, setJoinedCourses] = useState<string[]>([]);
+
+  useEffect(() => {
+    const loadJoinedCourses = () => {
+      try {
+        const raw = localStorage.getItem(JOINED_COURSES_STORAGE_KEY);
+        const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+        if (!Array.isArray(parsed)) return [] as string[];
+        return parsed
+          .filter((c): c is string => typeof c === "string")
+          .map((c) => c.trim())
+          .filter(Boolean);
+      } catch {
+        return [] as string[];
+      }
+    };
+
+    setJoinedCourses(loadJoinedCourses());
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === JOINED_COURSES_STORAGE_KEY) {
+        setJoinedCourses(loadJoinedCourses());
+      }
+    };
+
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
+  const courseSuggestionScenarios: Scenario[] = useMemo(() => {
+    const courses = joinedCourses.slice(0, 3);
+    const templates = [
+      (c: string) => ({
+        title: `${c} Study Group`,
+        desc: `Practice inviting classmates and setting up a study session for ${c}.`,
+        icon: "📚",
+      }),
+      (c: string) => ({
+        title: `${c} Project Team Chat`,
+        desc: `Practice proposing roles, timelines, and collaboration for ${c}.`,
+        icon: "🧩",
+      }),
+      (c: string) => ({
+        title: `${c} Office Hours Question`,
+        desc: `Practice asking clear, confident questions about assignments in ${c}.`,
+        icon: "🧠",
+      }),
+    ];
+
+    return courses.map((course, idx) => {
+      const t = templates[idx % templates.length]!(course);
+      return {
+        id: `course_${course.replace(/\s+/g, "_")}_${idx}`,
+        title: t.title,
+        icon: t.icon,
+        desc: t.desc,
+        isCustom: false,
+      };
+    });
+  }, [joinedCourses]);
   const [step, setStep] = useState<"prep" | "active">("prep");
-  const [selectedScenario, setSelectedScenario] = useState(allScenarios[0]);
+  const [selectedScenario, setSelectedScenario] = useState<Scenario>(() => {
+    return likedItemScenarios[0] ?? courseSuggestionScenarios[0] ?? DEFAULT_SCENARIOS[0]!;
+  });
   const [icebreakers, setIcebreakers] = useState<string[]>([]);
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [status, setStatus] = useState<string>("Ready to practice?");
   const [isQuotaFull, setIsQuotaFull] = useState(false);
   const [customScenario, setCustomScenario] = useState("");
   const [showCustomInput, setShowCustomInput] = useState(false);
+
+  useEffect(() => {
+    if (selectedScenario.isCustom) return;
+    const existsInLikes = likedItemScenarios.some((s) => s.id === selectedScenario.id);
+    const existsInCourses = courseSuggestionScenarios.some((s) => s.id === selectedScenario.id);
+    const existsInFallback = DEFAULT_SCENARIOS.some((s) => s.id === selectedScenario.id);
+    if (existsInLikes || existsInCourses || existsInFallback) return;
+
+    setSelectedScenario(likedItemScenarios[0] ?? courseSuggestionScenarios[0] ?? DEFAULT_SCENARIOS[0]!);
+  }, [likedItemScenarios, courseSuggestionScenarios, selectedScenario.id, selectedScenario.isCustom]);
 
   // New state for AI role customization
   const [roleOptions, setRoleOptions] = useState<string[]>([]);
@@ -654,52 +735,145 @@ Be encouraging but authentic to your assigned role. Reference McGill campus cont
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-12">
-          {allScenarios.map((s) => (
+        <div className="mb-12">
+          {likedItemScenarios.length > 0 && (
+            <>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-black text-slate-700 uppercase tracking-[0.25em]">
+                  From Your Likes
+                </span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  {likedItemScenarios.length} saved
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                {likedItemScenarios.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => setSelectedScenario(s)}
+                    className={`p-8 rounded-[2.5rem] text-left transition-all border-4 ${
+                      selectedScenario.id === s.id
+                        ? "bg-white border-mcgill-red shadow-2xl shadow-red-50 scale-[1.02]"
+                        : "bg-white border-slate-50 text-slate-700 hover:border-slate-100"
+                    }`}
+                  >
+                    <div className="flex items-center gap-6">
+                      <span className="text-4xl bg-slate-50 p-4 rounded-2xl">
+                        {s.icon}
+                      </span>
+                      <div>
+                        <h4 className="text-xl font-bold mb-1">{s.title}</h4>
+                        <p
+                          className={`text-sm ${selectedScenario.id === s.id ? "text-slate-500" : "text-slate-400"}`}
+                        >
+                          {s.desc}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {courseSuggestionScenarios.length > 0 && (
+            <>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-black text-slate-700 uppercase tracking-[0.25em]">
+                  From Your Courses
+                </span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+                  {courseSuggestionScenarios.length} suggested
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                {courseSuggestionScenarios.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => setSelectedScenario(s)}
+                    className={`p-8 rounded-[2.5rem] text-left transition-all border-4 ${
+                      selectedScenario.id === s.id
+                        ? "bg-white border-mcgill-red shadow-2xl shadow-red-50 scale-[1.02]"
+                        : "bg-white border-slate-50 text-slate-700 hover:border-slate-100"
+                    }`}
+                  >
+                    <div className="flex items-center gap-6">
+                      <span className="text-4xl bg-slate-50 p-4 rounded-2xl">
+                        {s.icon}
+                      </span>
+                      <div>
+                        <h4 className="text-xl font-bold mb-1">{s.title}</h4>
+                        <p
+                          className={`text-sm ${selectedScenario.id === s.id ? "text-slate-500" : "text-slate-400"}`}
+                        >
+                          {s.desc}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          {likedItemScenarios.length === 0 && courseSuggestionScenarios.length === 0 && (
+            <>
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-xs font-black text-slate-700 uppercase tracking-[0.25em]">
+                  Suggested Scenarios
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+                {DEFAULT_SCENARIOS.map((s) => (
+                  <button
+                    key={s.id}
+                    onClick={() => setSelectedScenario(s)}
+                    className={`p-8 rounded-[2.5rem] text-left transition-all border-4 ${
+                      selectedScenario.id === s.id
+                        ? "bg-white border-mcgill-red shadow-2xl shadow-red-50 scale-[1.02]"
+                        : "bg-white border-slate-50 text-slate-700 hover:border-slate-100"
+                    }`}
+                  >
+                    <div className="flex items-center gap-6">
+                      <span className="text-4xl bg-slate-50 p-4 rounded-2xl">
+                        {s.icon}
+                      </span>
+                      <div>
+                        <h4 className="text-xl font-bold mb-1">{s.title}</h4>
+                        <p
+                          className={`text-sm ${selectedScenario.id === s.id ? "text-slate-500" : "text-slate-400"}`}
+                        >
+                          {s.desc}
+                        </p>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Custom Practice Input */}
             <button
-              key={s.id}
-              onClick={() => setSelectedScenario(s)}
-              className={`p-8 rounded-[2.5rem] text-left transition-all border-4 ${
-                selectedScenario.id === s.id
-                  ? "bg-white border-mcgill-red shadow-2xl shadow-red-50 scale-[1.02]"
-                  : "bg-white border-slate-50 text-slate-700 hover:border-slate-100"
+              onClick={() => setShowCustomInput(!showCustomInput)}
+              className={`p-8 rounded-[2.5rem] text-left transition-all border-4 border-dashed ${
+                showCustomInput
+                  ? "bg-slate-50 border-mcgill-red"
+                  : "bg-white border-slate-200 hover:border-slate-300"
               }`}
             >
               <div className="flex items-center gap-6">
-                <span className="text-4xl bg-slate-50 p-4 rounded-2xl">
-                  {s.icon}
-                </span>
+                <span className="text-4xl bg-slate-50 p-4 rounded-2xl">✨</span>
                 <div>
-                  <h4 className="text-xl font-bold mb-1">{s.title}</h4>
-                  <p
-                    className={`text-sm ${selectedScenario.id === s.id ? "text-slate-500" : "text-slate-400"}`}
-                  >
-                    {s.desc}
+                  <h4 className="text-xl font-bold mb-1">Custom Practice</h4>
+                  <p className="text-sm text-slate-400">
+                    {showCustomInput ? "Enter your scenario" : "Create your own"}
                   </p>
                 </div>
               </div>
             </button>
-          ))}
-
-          {/* Custom Practice Input */}
-          <button
-            onClick={() => setShowCustomInput(!showCustomInput)}
-            className={`p-8 rounded-[2.5rem] text-left transition-all border-4 border-dashed ${
-              showCustomInput
-                ? "bg-slate-50 border-mcgill-red"
-                : "bg-white border-slate-200 hover:border-slate-300"
-            }`}
-          >
-            <div className="flex items-center gap-6">
-              <span className="text-4xl bg-slate-50 p-4 rounded-2xl">✨</span>
-              <div>
-                <h4 className="text-xl font-bold mb-1">Custom Practice</h4>
-                <p className="text-sm text-slate-400">
-                  {showCustomInput ? "Enter your scenario" : "Create your own"}
-                </p>
-              </div>
-            </div>
-          </button>
+          </div>
         </div>
 
         {showCustomInput && (
@@ -726,8 +900,8 @@ Be encouraging but authentic to your assigned role. Reference McGill campus cont
           </div>
         )}
 
-        <div className="flex justify-end mt-12">
-          <div className="bg-mcgill-red rounded-[3rem] p-10 flex flex-col justify-center items-center text-center shadow-2xl shadow-red-100 w-full max-w-sm">
+        <div className="flex justify-center mt-12">
+          <div className="bg-mcgill-red rounded-[3rem] p-12 flex flex-col justify-center items-center text-center shadow-2xl shadow-red-100 w-full max-w-md">
             <h4 className="text-white font-black text-2xl mb-4">
               Ready to go?
             </h4>
@@ -736,7 +910,7 @@ Be encouraging but authentic to your assigned role. Reference McGill campus cont
             </p>
             <button
               onClick={startSession}
-              className="w-full py-5 bg-white text-mcgill-red font-black text-lg rounded-3xl shadow-xl transition-all hover:scale-105 active:scale-95"
+              className="w-full py-6 bg-white text-mcgill-red font-black text-xl rounded-3xl shadow-xl transition-all hover:scale-105 active:scale-95"
             >
               Start Practice
             </button>
