@@ -370,11 +370,17 @@ const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
         ? "professional yet friendly"
         : "formal and structured";
 
-    return `You are roleplaying as: "${roleText}" for a McGill student practicing for "${selectedScenario.title}".
+    return `You are roleplaying as: "${roleText}" in an immersive, realistic conversation for a McGill student in this scenario: "${selectedScenario.title}".
 Your interaction style should be ${pressureDesc}, ${nicenessDesc}, and ${formalityDesc}.
-Stay in character and focus on realistic roleplay dialogue.
-Do NOT provide coaching (outfit/body language/facial expression feedback) unless the user explicitly asks for coaching.
-Reference McGill campus context when relevant.`;
+
+CRITICAL RULES:
+- Stay fully in character at all times.
+- Do NOT mention coaching, practice, "training", or ask "are you ready to practice?".
+- Do NOT give outfit/body language/facial expression feedback unless the user explicitly asks for feedback.
+- The FIRST thing you say must immediately start the scenario in character with a natural opener appropriate to "${roleText}".
+  Example (if interviewer): introduce yourself as the interviewer and begin the interview right away.
+
+Keep the dialogue natural and responsive. Reference McGill/campus context when relevant.`;
   };
 
   const buildCoachInstruction = (): string => {
