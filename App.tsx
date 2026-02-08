@@ -8,10 +8,10 @@ import Welcome from "./components/Welcome";
 import { generateRecommendations } from "./services/gemini";
 import { DiscoveryItem, DiscoveryType, CollabRequest } from "./types";
 import type { UserProfile } from "./types";
+import McGillCourses from "./components/McGillCourses";
 
 const ACCOUNTS_KEY = "uc_accounts";
 const ACTIVE_ACCOUNT_KEY = "uc_active_account";
-const savedAccounts = localStorage.getItem(ACCOUNTS_KEY);
 const GLOBAL_COLLABS_KEY = "uc_global_collabs";
 
 const profileKey = (id: string) => `uc_profile_${id}`;
@@ -64,14 +64,11 @@ const App: React.FC = () => {
 
 
   const [showWelcome, setShowWelcome] = useState(true);
-
   const [onboardingComplete, setOnboardingComplete] = useState(false);
 
-  // Accounts
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [activeAccountId, setActiveAccountId] = useState<string | null>(null);
 
-  // Profile (loaded per account)
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isEditingProfile, setIsEditingProfile] = useState(false);
 
@@ -99,8 +96,7 @@ const App: React.FC = () => {
       const dataUrl = reader.result as string;
       setUserProfile((prev) => (prev ? { ...prev, avatar: dataUrl } : prev));
     };
-    reader.onerror = () =>
-      alert("Could not read that file. Try another image.");
+    reader.onerror = () => alert("Could not read that file. Try another image.");
     reader.readAsDataURL(file);
   };
 
@@ -120,12 +116,10 @@ const App: React.FC = () => {
     }
   };
 
-  // Discovery & Hearting State
   const [heartedItems, setHeartedItems] = useState<DiscoveryItem[]>([]);
   const [collabRequests, setCollabRequests] = useState<CollabRequest[]>([]);
   const [isCollabModalOpen, setIsCollabModalOpen] = useState(false);
 
-  // Form state for new request
   const [newReqTitle, setNewReqTitle] = useState("");
   const [newReqGoal, setNewReqGoal] = useState(COLLAB_GOALS[0]);
   const [newReqSize, setNewReqSize] = useState(2);
@@ -140,18 +134,15 @@ const App: React.FC = () => {
   const [recs, setRecs] = useState<{ title: string; reason: string }[]>([]);
   const [hasPersonalKey, setHasPersonalKey] = useState(false);
 
-  // Load accounts
   useEffect(() => {
     const c = localStorage.getItem(GLOBAL_COLLABS_KEY);
     setCollabRequests(c ? JSON.parse(c) : []);
+
     const savedAccounts = localStorage.getItem(ACCOUNTS_KEY);
     const savedActive = localStorage.getItem(ACTIVE_ACCOUNT_KEY);
 
-    const parsedAccounts: Account[] = savedAccounts
-      ? JSON.parse(savedAccounts)
-      : [];
+    const parsedAccounts: Account[] = savedAccounts ? JSON.parse(savedAccounts) : [];
 
-    // First time: create default account
     if (parsedAccounts.length === 0) {
       const id = makeAccountId();
       const defaultAcc: Account = {
@@ -177,7 +168,6 @@ const App: React.FC = () => {
     localStorage.setItem(ACTIVE_ACCOUNT_KEY, activeId);
   }, []);
 
-  // Load profile/hearts/collabs for active account
   useEffect(() => {
     if (!activeAccountId) return;
 
@@ -188,9 +178,7 @@ const App: React.FC = () => {
     if (p) {
       setUserProfile(JSON.parse(p));
       setOnboardingComplete(true);
-      // ✅ DO NOT auto-close welcome here
     } else {
-      // No profile yet => start onboarding for this account
       setUserProfile({
         id: activeAccountId,
         name: "New User",
@@ -203,7 +191,6 @@ const App: React.FC = () => {
         experience: ["Research Assistant @ McGill", "Intern @ Shopify"],
       });
       setOnboardingComplete(false);
-      // ✅ DO NOT auto-close welcome here
     }
 
     setHeartedItems(h ? JSON.parse(h) : []);
@@ -227,13 +214,11 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!userProfile || !activeAccountId) return;
-
     if (userProfile.id !== activeAccountId) return;
 
     setAccounts((prev) => {
       const current = prev.find((a) => a.id === activeAccountId);
       if (!current) return prev;
-
       if (current.name === userProfile.name) return prev;
 
       const updated = prev.map((acc) =>
@@ -245,37 +230,25 @@ const App: React.FC = () => {
     });
   }, [userProfile?.name, userProfile?.id, activeAccountId]);
 
-  // Persist profile
   useEffect(() => {
     if (!activeAccountId || !userProfile) return;
-    localStorage.setItem(
-      profileKey(activeAccountId),
-      JSON.stringify(userProfile),
-    );
+    localStorage.setItem(profileKey(activeAccountId), JSON.stringify(userProfile));
   }, [activeAccountId, userProfile]);
 
-  // Persist hearts
   useEffect(() => {
     if (!activeAccountId) return;
-    localStorage.setItem(
-      heartsKey(activeAccountId),
-      JSON.stringify(heartedItems),
-    );
+    localStorage.setItem(heartsKey(activeAccountId), JSON.stringify(heartedItems));
   }, [activeAccountId, heartedItems]);
 
-  // Persist collabs
   useEffect(() => {
     localStorage.setItem(GLOBAL_COLLABS_KEY, JSON.stringify(collabRequests));
   }, [collabRequests]);
 
-  // Fetch recs
   useEffect(() => {
     if (!userProfile) return;
     const fetchRecs = async () => {
       if (userProfile.interests.length > 0) {
-        const suggestions = await generateRecommendations(
-          userProfile.interests,
-        );
+        const suggestions = await generateRecommendations(userProfile.interests);
         setRecs(suggestions);
       }
     };
@@ -350,9 +323,7 @@ const App: React.FC = () => {
       const next = prev.map((r) => {
         if (r.id !== requestId) return r;
 
-        const participants = Array.isArray(r.participants)
-          ? r.participants
-          : [];
+        const participants = Array.isArray(r.participants) ? r.participants : [];
         const already = participants.includes(activeAccountId);
 
         return {
@@ -363,7 +334,6 @@ const App: React.FC = () => {
         };
       });
 
-      // IMPORTANT: persist immediately so other accounts/tabs can see it
       localStorage.setItem(GLOBAL_COLLABS_KEY, JSON.stringify(next));
       return next;
     });
@@ -385,16 +355,12 @@ const App: React.FC = () => {
   };
 
   const addArrayItem = (field: "skills" | "experience") => {
-    setUserProfile((prev) =>
-      prev ? { ...prev, [field]: [...prev[field], ""] } : prev,
-    );
+    setUserProfile((prev) => (prev ? { ...prev, [field]: [...prev[field], ""] } : prev));
   };
 
   const removeArrayItem = (field: "skills" | "experience", index: number) => {
     setUserProfile((prev) =>
-      prev
-        ? { ...prev, [field]: prev[field].filter((_, i) => i !== index) }
-        : prev,
+      prev ? { ...prev, [field]: prev[field].filter((_, i) => i !== index) } : prev,
     );
   };
 
@@ -426,8 +392,7 @@ const App: React.FC = () => {
   }
 
   if (!userProfile) return null;
-  if (!onboardingComplete)
-    return <Onboarding onComplete={handleOnboardingComplete} />;
+  if (!onboardingComplete) return <Onboarding onComplete={handleOnboardingComplete} />;
 
   const renderContent = () => {
     switch (activeTab) {
@@ -477,42 +442,12 @@ const App: React.FC = () => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-16">
                   {[
-                    {
-                      name: "SSMU Club Fair",
-                      type: "Event",
-                      date: "Sept 14",
-                      color: "bg-indigo-500",
-                    },
-                    {
-                      name: "McGill Outdoors Club",
-                      type: "Community",
-                      date: "Active Now",
-                      color: "bg-emerald-500",
-                    },
-                    {
-                      name: "Gerts Student Bar",
-                      type: "Venue",
-                      date: "Open 4pm",
-                      color: "bg-amber-500",
-                    },
-                    {
-                      name: "Desautels Networking",
-                      type: "Career",
-                      date: "Oct 02",
-                      color: "bg-rose-500",
-                    },
-                    {
-                      name: "Redpath Study Group",
-                      type: "Academic",
-                      date: "Ongoing",
-                      color: "bg-sky-500",
-                    },
-                    {
-                      name: "Daily Martlet Fans",
-                      type: "Athletics",
-                      date: "Saturday",
-                      color: "bg-mcgill-red",
-                    },
+                    { name: "SSMU Club Fair", type: "Event", date: "Sept 14", color: "bg-indigo-500" },
+                    { name: "McGill Outdoors Club", type: "Community", date: "Active Now", color: "bg-emerald-500" },
+                    { name: "Gerts Student Bar", type: "Venue", date: "Open 4pm", color: "bg-amber-500" },
+                    { name: "Desautels Networking", type: "Career", date: "Oct 02", color: "bg-rose-500" },
+                    { name: "Redpath Study Group", type: "Academic", date: "Ongoing", color: "bg-sky-500" },
+                    { name: "Daily Martlet Fans", type: "Athletics", date: "Saturday", color: "bg-mcgill-red" },
                   ].map((item) => (
                     <div
                       key={item.name}
@@ -523,9 +458,7 @@ const App: React.FC = () => {
                       >
                         {item.name[0]}
                       </div>
-                      <h4 className="text-xl font-bold text-slate-900 mb-1">
-                        {item.name}
-                      </h4>
+                      <h4 className="text-xl font-bold text-slate-900 mb-1">{item.name}</h4>
                       <div className="flex items-center justify-between">
                         <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">
                           {item.type}
@@ -544,12 +477,8 @@ const App: React.FC = () => {
                       key={i}
                       className="bg-white p-6 rounded-[2rem] border border-white/10 shadow-lg"
                     >
-                      <h4 className="font-bold text-slate-900 text-lg mb-2">
-                        {rec.title}
-                      </h4>
-                      <p className="text-sm text-slate-500 leading-relaxed font-medium">
-                        {rec.reason}
-                      </p>
+                      <h4 className="font-bold text-slate-900 text-lg mb-2">{rec.title}</h4>
+                      <p className="text-sm text-slate-500 leading-relaxed font-medium">{rec.reason}</p>
                     </div>
                   ))}
                 </div>
@@ -569,19 +498,22 @@ const App: React.FC = () => {
                 Event Calendar
               </h2>
             </header>
-            <Calendar
-              savedItems={heartedItems}
-              allItems={collabRequests}
-              onSaveItem={handleHeart}
-            />
+            <Calendar savedItems={heartedItems} allItems={collabRequests} onSaveItem={handleHeart} />
           </div>
         );
+
+      case "courses":
+        return (
+          <McGillCourses
+            userProfile={userProfile} // #mariam
+            activeAccountId={activeAccountId!} // #mariam
+          />
+        ); // #mariam
 
       case "profile":
         return (
           <div className="p-8 lg:p-16 pb-32 max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="grid lg:grid-cols-3 gap-12">
-              {/* Profile Card */}
               <div className="bg-white rounded-[3.5rem] shadow-xl shadow-slate-100/50 p-10 border border-slate-50 text-center flex flex-col items-center h-fit sticky top-12">
                 <div className="mb-8 relative">
                   <div className="w-32 h-32 rounded-full border-[6px] border-slate-50 shadow-2xl overflow-hidden bg-slate-100">
@@ -601,42 +533,29 @@ const App: React.FC = () => {
 
                 {isEditingProfile ? (
                   <div className="w-full space-y-4">
-                    {/* Name */}
                     <div>
                       <label className="block text-[10px] font-black text-slate-400 uppercase text-left mb-1 ml-2">
                         Name
                       </label>
                       <input
                         value={userProfile.name}
-                        onChange={(e) =>
-                          setUserProfile({
-                            ...userProfile,
-                            name: e.target.value,
-                          })
-                        }
+                        onChange={(e) => setUserProfile({ ...userProfile, name: e.target.value })}
                         className="w-full p-3 bg-slate-50 rounded-xl font-bold"
                       />
                     </div>
 
-                    {/* GPA */}
                     <div>
                       <label className="block text-[10px] font-black text-slate-400 uppercase text-left mb-1 ml-2">
                         GPA
                       </label>
                       <input
                         value={userProfile.gpa}
-                        onChange={(e) =>
-                          setUserProfile({
-                            ...userProfile,
-                            gpa: e.target.value,
-                          })
-                        }
+                        onChange={(e) => setUserProfile({ ...userProfile, gpa: e.target.value })}
                         className="w-full p-3 bg-slate-50 rounded-xl font-bold"
                         placeholder="e.g. 4.0"
                       />
                     </div>
 
-                    {/* Profile picture */}
                     <div>
                       <label className="block text-[10px] font-black text-slate-400 uppercase text-left mb-1 ml-2">
                         Profile picture
@@ -645,18 +564,14 @@ const App: React.FC = () => {
                       <input
                         type="file"
                         accept="image/*"
-                        onChange={(e) =>
-                          handleAvatarFile(e.target.files?.[0] ?? null)
-                        }
+                        onChange={(e) => handleAvatarFile(e.target.files?.[0] ?? null)}
                         className="w-full p-3 bg-slate-50 rounded-xl font-bold"
                       />
 
                       <button
                         type="button"
                         onClick={() =>
-                          setUserProfile((prev) =>
-                            prev ? { ...prev, avatar: "" } : prev,
-                          )
+                          setUserProfile((prev) => (prev ? { ...prev, avatar: "" } : prev))
                         }
                         className="w-full mt-3 py-3 bg-white border border-slate-200 rounded-xl text-[9px] font-black text-slate-400 hover:text-mcgill-red hover:border-mcgill-red transition-all uppercase"
                       >
@@ -691,7 +606,6 @@ const App: React.FC = () => {
                   </>
                 )}
 
-                {/* API Health Check */}
                 <div className="mt-8 w-full p-5 bg-slate-50 rounded-3xl border border-slate-100">
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
@@ -721,10 +635,7 @@ const App: React.FC = () => {
                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex justify-between items-center">
                       Experience
                       {isEditingProfile && (
-                        <button
-                          onClick={() => addArrayItem("experience")}
-                          className="text-mcgill-red font-black text-lg"
-                        >
+                        <button onClick={() => addArrayItem("experience")} className="text-mcgill-red font-black text-lg">
                           +
                         </button>
                       )}
@@ -735,9 +646,7 @@ const App: React.FC = () => {
                           {isEditingProfile ? (
                             <input
                               value={exp}
-                              onChange={(e) =>
-                                toggleArrayItem("experience", i, e.target.value)
-                              }
+                              onChange={(e) => toggleArrayItem("experience", i, e.target.value)}
                               className="flex-1 p-3 bg-slate-50 rounded-xl text-xs font-medium border border-slate-100"
                             />
                           ) : (
@@ -746,10 +655,7 @@ const App: React.FC = () => {
                             </div>
                           )}
                           {isEditingProfile && (
-                            <button
-                              onClick={() => removeArrayItem("experience", i)}
-                              className="text-slate-200 hover:text-red-500"
-                            >
+                            <button onClick={() => removeArrayItem("experience", i)} className="text-slate-200 hover:text-red-500">
                               ×
                             </button>
                           )}
@@ -762,10 +668,7 @@ const App: React.FC = () => {
                     <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3 flex justify-between items-center">
                       Skills
                       {isEditingProfile && (
-                        <button
-                          onClick={() => addArrayItem("skills")}
-                          className="text-mcgill-red font-black text-lg"
-                        >
+                        <button onClick={() => addArrayItem("skills")} className="text-mcgill-red font-black text-lg">
                           +
                         </button>
                       )}
@@ -776,9 +679,7 @@ const App: React.FC = () => {
                           {isEditingProfile ? (
                             <input
                               value={skill}
-                              onChange={(e) =>
-                                toggleArrayItem("skills", i, e.target.value)
-                              }
+                              onChange={(e) => toggleArrayItem("skills", i, e.target.value)}
                               className="w-20 p-2 bg-slate-50 rounded-lg text-[9px] font-black"
                             />
                           ) : (
@@ -787,10 +688,7 @@ const App: React.FC = () => {
                             </span>
                           )}
                           {isEditingProfile && (
-                            <button
-                              onClick={() => removeArrayItem("skills", i)}
-                              className="text-slate-300"
-                            >
+                            <button onClick={() => removeArrayItem("skills", i)} className="text-slate-300">
                               ×
                             </button>
                           )}
@@ -801,14 +699,10 @@ const App: React.FC = () => {
                 </div>
               </div>
 
-              {/* Side Panels */}
               <div className="lg:col-span-2 space-y-8">
-                {/* Hearted Items */}
                 <div className="bg-white rounded-[3rem] p-10 shadow-sm border border-slate-50">
                   <h3 className="text-2xl font-black text-slate-900 mb-8 flex items-center gap-4">
-                    <span className="bg-mcgill-red text-white p-2 rounded-xl text-lg">
-                      ❤️
-                    </span>
+                    <span className="bg-mcgill-red text-white p-2 rounded-xl text-lg">❤️</span>
                     Saved & Hearted
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -822,16 +716,10 @@ const App: React.FC = () => {
                             <span className="text-[9px] font-black text-mcgill-red uppercase tracking-widest mb-1 block">
                               {item.type}
                             </span>
-                            <h5 className="font-bold text-slate-900">
-                              {item.title}
-                            </h5>
+                            <h5 className="font-bold text-slate-900">{item.title}</h5>
                           </div>
                           <button
-                            onClick={() =>
-                              setHeartedItems((prev) =>
-                                prev.filter((h) => h.id !== item.id),
-                              )
-                            }
+                            onClick={() => setHeartedItems((prev) => prev.filter((h) => h.id !== item.id))}
                             className="mt-4 text-[10px] font-bold text-slate-400 hover:text-red-500 transition-colors uppercase tracking-widest"
                           >
                             Unsave
@@ -846,19 +734,14 @@ const App: React.FC = () => {
                   </div>
                 </div>
 
-                {/* My Broadcasts */}
                 <div className="bg-white rounded-[3rem] p-10 shadow-sm border border-slate-50">
                   <h3 className="text-2xl font-black text-slate-900 mb-8 flex items-center gap-4">
-                    <span className="bg-indigo-600 text-white p-2 rounded-xl text-lg">
-                      📡
-                    </span>
+                    <span className="bg-indigo-600 text-white p-2 rounded-xl text-lg">📡</span>
                     Your Campus Broadcasts
                   </h3>
 
                   <div className="space-y-4">
-                    {collabRequests.filter(
-                      (r) => r.creatorId === userProfile.id,
-                    ).length > 0 ? (
+                    {collabRequests.filter((r) => r.creatorId === userProfile.id).length > 0 ? (
                       collabRequests
                         .filter((r) => r.creatorId === userProfile.id)
                         .map((req) => (
@@ -876,8 +759,7 @@ const App: React.FC = () => {
 
                               <div className="flex items-center gap-4">
                                 <p className="text-xs text-slate-500 font-bold uppercase tracking-widest">
-                                  {req.participants.length} /{" "}
-                                  {req.targetGroupSize} Interested
+                                  {req.participants.length} / {req.targetGroupSize} Interested
                                 </p>
                                 {req.participants.length > 0 && (
                                   <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
@@ -885,19 +767,10 @@ const App: React.FC = () => {
                               </div>
                             </div>
                             <button
-                              onClick={() =>
-                                setCollabRequests((prev) =>
-                                  prev.filter((r) => r.id !== req.id),
-                                )
-                              }
+                              onClick={() => setCollabRequests((prev) => prev.filter((r) => r.id !== req.id))}
                               className="text-slate-300 hover:text-red-500 transition-colors"
                             >
-                              <svg
-                                className="w-6 h-6"
-                                fill="none"
-                                stroke="currentColor"
-                                viewBox="0 0 24 24"
-                              >
+                              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path
                                   strokeLinecap="round"
                                   strokeLinejoin="round"
@@ -910,8 +783,7 @@ const App: React.FC = () => {
                         ))
                     ) : (
                       <div className="py-12 text-center text-slate-400 italic font-medium">
-                        You haven't sent any broadcasts. Click the + button
-                        below to start!
+                        You haven't sent any broadcasts. Click the + button below to start!
                       </div>
                     )}
                   </div>
@@ -944,17 +816,11 @@ const App: React.FC = () => {
           setActiveAccountId(id);
           localStorage.setItem(ACTIVE_ACCOUNT_KEY, id);
           setActiveTab("discover");
-          // ✅ optional: show welcome again when switching accounts
           setShowWelcome(true);
         }}
         onCreateAccount={() => {
           const id = makeAccountId();
-          const newAcc = {
-            id,
-            name: "New User",
-            createdAt: Date.now(),
-          };
-
+          const newAcc = { id, name: "New User", createdAt: Date.now() };
           const next = [newAcc, ...accounts];
 
           setAccounts(next);
@@ -963,7 +829,6 @@ const App: React.FC = () => {
           setActiveAccountId(id);
           localStorage.setItem(ACTIVE_ACCOUNT_KEY, id);
 
-          // ✅ NEW ACCOUNT -> start at welcome
           setShowWelcome(true);
           setOnboardingComplete(false);
           setActiveTab("discover");
@@ -973,7 +838,6 @@ const App: React.FC = () => {
       <main className="flex-1 min-h-screen lg:ml-0 overflow-y-auto relative bg-transparent">
         {renderContent()}
 
-        {/* Floating Action Button */}
         <button
           onClick={() => setIsCollabModalOpen(true)}
           className="fixed bottom-8 right-8 w-16 h-16 bg-mcgill-red text-white rounded-full shadow-[0_20px_50px_rgba(237,27,47,0.3)] flex items-center justify-center hover:scale-110 active:scale-95 transition-all z-40 group"
@@ -984,22 +848,18 @@ const App: React.FC = () => {
             stroke="currentColor"
             viewBox="0 0 24 24"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="3"
-              d="M12 4v16m8-8H4"
-            ></path>
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="3" d="M12 4v16m8-8H4"></path>
           </svg>
           <span className="absolute right-24 bg-slate-900 text-white px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none shadow-xl">
             New Broadcast
           </span>
         </button>
 
-        {/* Create Collab Modal */}
         {isCollabModalOpen && (
           <div className="fixed inset-0 bg-slate-900/70 backdrop-blur-md z-[110] flex items-center justify-center p-6">
             <div className="bg-white w-full max-w-xl rounded-[4rem] p-12 lg:p-16 shadow-2xl animate-in fade-in zoom-in-95 duration-300">
+              {/* ... your existing modal code stays the same ... */}
+              {/* (No changes needed for the swipe-avatar feature) */}
               <div className="flex justify-between items-center mb-10">
                 <div>
                   <span className="text-xs font-black text-mcgill-red uppercase tracking-widest mb-1 block">
@@ -1013,18 +873,8 @@ const App: React.FC = () => {
                   onClick={() => setIsCollabModalOpen(false)}
                   className="text-slate-200 hover:text-slate-900 transition-colors"
                 >
-                  <svg
-                    className="w-10 h-10"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2.5"
-                      d="M6 18L18 6M6 6l12 12"
-                    ></path>
+                  <svg className="w-10 h-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M6 18L18 6M6 6l12 12"></path>
                   </svg>
                 </button>
               </div>

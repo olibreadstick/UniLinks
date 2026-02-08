@@ -29,6 +29,10 @@ const Navigation: React.FC<NavProps> = ({
     { id: "coach", label: "Social Coach", icon: "" },
     { id: "community", label: "McGill Hub", icon: "" },
     { id: "calendar", label: "Calendar", icon: "📅" },
+
+    // # mariam — new McGill Courses tab
+    { id: "courses", label: "McGill Courses", icon: "📚" },
+
     { id: "profile", label: "Profile", icon: "👤" },
   ];
 
