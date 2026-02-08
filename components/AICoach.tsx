@@ -5,6 +5,7 @@ import {
   getRoleSuggestions,
   getTryTheseLines,
   getRoleplayFeedback,
+  getLiveRoleplayReplySuggestions,
   type RoleplayFeedback,
 } from "../services/gemini";
 import { DiscoveryItem, DiscoveryType } from "../types";
@@ -121,7 +122,7 @@ const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
     if (g.includes("strict") || g.includes("tough")) {
       return "Be extra direct and specific. Point out one clear improvement at a time and ask for an immediate retry.";
     }
-    return "Tailor your feedback to the goal with specific, observable cues from camera presence and delivery.";
+    return "Tailor your feedback to the goal with specific, observable cues from in-person presence and delivery.";
   };
   const likedItemScenarios: Scenario[] = useMemo(() => {
     return heartedItems.map((item) => ({
@@ -216,6 +217,8 @@ const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
   const [isTryLinesLoading, setIsTryLinesLoading] = useState(false);
   const [roleplayFeedback, setRoleplayFeedbackState] = useState<RoleplayFeedback | null>(null);
   const [isRoleplayFeedbackLoading, setIsRoleplayFeedbackLoading] = useState(false);
+  const [liveReplySuggestions, setLiveReplySuggestions] = useState<string[]>([]);
+  const [isLiveReplySuggestionsLoading, setIsLiveReplySuggestionsLoading] = useState(false);
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [status, setStatus] = useState<string>("Ready to practice?");
   const [isQuotaFull, setIsQuotaFull] = useState(false);
@@ -262,7 +265,7 @@ const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
       const fallback = next.length ? next : [
         "Start with a confident, specific introduction.",
         "Ask 2 strong follow-up questions.",
-        "Improve posture and eye contact on camera.",
+        "Improve posture and eye contact in person.",
       ];
       setCoachGoalSuggestionsState(fallback);
       const nextDefault = fallback[0] ?? "";
@@ -313,6 +316,7 @@ const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
   const [sideCollapsed, setSideCollapsed] = useState<Record<string, boolean>>({
     mode: false,
     ice: false,
+    live: false,
     goal: false,
     coach: false,
     role: false,
@@ -352,6 +356,12 @@ const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
     transcript: [] as Array<{ tsMs: number; who: "user" | "ai"; text: string }>,
   });
 
+  const liveSuggestRef = useRef({
+    lastAiKey: "",
+    lastRequestedAtMs: 0,
+    debounceHandle: 0 as any,
+  });
+
   const resetRoleplayCapture = () => {
     roleplayCaptureRef.current = {
       startedAt: Date.now(),
@@ -367,6 +377,51 @@ const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
       transcript: [],
     };
     setRoleplayFeedbackState(null);
+    setLiveReplySuggestions([]);
+  };
+
+  const requestLiveReplySuggestions = async (aiText: string) => {
+    const trimmed = (aiText || "").trim();
+    if (!trimmed) return;
+    if (!(practiceModeRef.current === "roleplay" && isSessionActive)) return;
+
+    const key = trimmed.toLowerCase();
+    const now = Date.now();
+    if (key === liveSuggestRef.current.lastAiKey) return;
+    if (trimmed.length < 12) return;
+    if (now - liveSuggestRef.current.lastRequestedAtMs < 1800) return;
+
+    liveSuggestRef.current.lastAiKey = key;
+    liveSuggestRef.current.lastRequestedAtMs = now;
+    setIsLiveReplySuggestionsLoading(true);
+
+    try {
+      const scenarioContext = selectedScenario.desc
+        ? `${selectedScenario.title} — ${selectedScenario.desc}`
+        : selectedScenario.title;
+
+      const cap = roleplayCaptureRef.current;
+      const recentTranscript = cap.transcript
+        .slice(-14)
+        .map((t) => `${t.who === "user" ? "USER" : "AI"}: ${t.text}`)
+        .join("\n");
+
+      const suggestions = await getLiveRoleplayReplySuggestions({
+        scenario: scenarioContext,
+        role: activePersonaText || pendingPersonaText || "(unspecified role)",
+        aiSaid: trimmed,
+        recentTranscript,
+        pressure: pendingSettings.pressure,
+        niceness: pendingSettings.niceness,
+        formality: pendingSettings.formality,
+      });
+
+      if (Array.isArray(suggestions) && suggestions.length) {
+        setLiveReplySuggestions(suggestions.slice(0, 4));
+      }
+    } finally {
+      setIsLiveReplySuggestionsLoading(false);
+    }
   };
 
   const setSpeakingState = (value: boolean) => {
@@ -553,9 +608,15 @@ const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
   useEffect(() => {
     let alive = true;
     setRoleOptions([]);
+    setCustomRole("");
+    setShowCustomRoleInput(false);
+
+    const scenarioContext = selectedScenario.desc
+      ? `${selectedScenario.title} — ${selectedScenario.desc}`
+      : selectedScenario.title;
 
     (async () => {
-      const roles = await getRoleSuggestions(selectedScenario.title);
+      const roles = await getRoleSuggestions(scenarioContext);
       if (!alive) return;
       const next = (roles || []).filter(Boolean);
       const fallback = next.length ? next : getRoleSuggestionsFallback(selectedScenario.title);
@@ -571,10 +632,7 @@ const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
     return () => {
       alive = false;
     };
-
-    setCustomRole("");
-    setShowCustomRoleInput(false);
-  }, [selectedScenario]);
+  }, [selectedScenario.title, selectedScenario.desc]);
 
   const applyChanges = () => {
     const nextRole = pendingRole;
@@ -680,11 +738,11 @@ Keep the dialogue natural and responsive. Reference McGill/campus context when r
         ? "direct but encouraging"
         : "highly critical, precise, and improvement-focused";
 
-    const goalText = (coachSettings.goal || "").trim() || "Improve my communication and camera presence";
+    const goalText = (coachSettings.goal || "").trim() || "Improve my communication and in-person presence";
     const goalHints = getGoalPriorityHints(goalText);
 
     return `You are an AI Coach for a McGill student practicing for "${selectedScenario.title}".
-Your job is to give real-time coaching and actionable feedback based on their camera presence and communication.
+Your job is to give real-time coaching and actionable feedback as if they are speaking to a real person in real life.
 Focus on: ${focusText}.
 Primary goal: "${goalText}".
 ${goalHints}
@@ -1129,10 +1187,33 @@ Do NOT roleplay as a recruiter/friend/stranger; you are strictly a coach.`;
             if (practiceModeRef.current === "roleplay" && textParts.length) {
               const cap = roleplayCaptureRef.current;
               const combined = textParts.join(" ");
-              cap.transcript.push({ tsMs: Date.now(), who: "ai", text: combined });
+
+              // De-dupe / merge partial text updates
+              const nowMs = Date.now();
+              const last = cap.transcript[cap.transcript.length - 1];
+              if (last && last.who === "ai" && nowMs - last.tsMs < 3500) {
+                const lastText = (last.text || "").trim();
+                const nextText = combined.trim();
+                if (nextText && (nextText === lastText || nextText.startsWith(lastText))) {
+                  last.text = nextText;
+                  last.tsMs = nowMs;
+                } else {
+                  cap.transcript.push({ tsMs: nowMs, who: "ai", text: combined });
+                }
+              } else {
+                cap.transcript.push({ tsMs: nowMs, who: "ai", text: combined });
+              }
               if (cap.transcript.length > 80) {
                 cap.transcript.splice(0, cap.transcript.length - 80);
               }
+
+              // Live suggestions: debounce slightly, request once per new relevant AI utterance
+              if (liveSuggestRef.current.debounceHandle) {
+                window.clearTimeout(liveSuggestRef.current.debounceHandle);
+              }
+              liveSuggestRef.current.debounceHandle = window.setTimeout(() => {
+                requestLiveReplySuggestions(combined);
+              }, 450);
             }
             const audioParts = parts.filter((p: any) =>
               p?.inlineData?.data &&
@@ -1236,6 +1317,9 @@ Do NOT roleplay as a recruiter/friend/stranger; you are strictly a coach.`;
       streamRef.current.getTracks().forEach((t) => t.stop());
     if ((window as any)._coachTimer) clearInterval((window as any)._coachTimer);
     if (sessionRef.current) sessionRef.current.close();
+
+    setLiveReplySuggestions([]);
+    setIsLiveReplySuggestionsLoading(false);
   };
 
   // Loading Screen Component
@@ -1712,6 +1796,40 @@ Do NOT roleplay as a recruiter/friend/stranger; you are strictly a coach.`;
                 )}
               </div>
 
+              {practiceMode === "roleplay" && (
+                <div className="mb-8">
+                  <button
+                    type="button"
+                    onClick={() => toggleSide("live")}
+                    aria-expanded={!sideCollapsed.live}
+                    className={`${sideHeaderClass} text-white/85 text-xs font-black uppercase tracking-[0.25em] mb-3`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-mcgill-red" />
+                      <span>💡 Live Reply Suggestions</span>
+                    </span>
+                    <span className={sideHeaderCaretClass(sideCollapsed.live)}>▾</span>
+                  </button>
+                  {!sideCollapsed.live && (
+                    <div className="space-y-2">
+                      {!isSessionActive ? (
+                        <p className="text-xs text-white/40">Start roleplay to get live suggestions.</p>
+                      ) : liveReplySuggestions.length > 0 ? (
+                        liveReplySuggestions.map((s, i) => (
+                          <div key={i} className="bg-white/5 border border-white/10 p-3 rounded-lg">
+                            <p className="text-xs text-white/80 italic leading-relaxed">"{s}"</p>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-xs text-slate-400 animate-pulse">
+                          {isLiveReplySuggestionsLoading ? "Generating live replies..." : "Waiting for the AI to say something..."}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
               {practiceMode === "coach" && (
                 <div className="mb-8">
                   {/* Coach Goal */}
@@ -1951,14 +2069,14 @@ Do NOT roleplay as a recruiter/friend/stranger; you are strictly a coach.`;
                             onClick={() => setShowCustomRoleInput(!showCustomRoleInput)}
                             className="w-full px-3 py-2 rounded-lg text-xs font-bold transition-all text-left bg-white/5 border border-dashed border-white/30 text-white/70 hover:border-white/50"
                           >
-                            ✨ Custom Role
+                            ✨ Custom / Paste Role
                           </button>
                         </div>
                         {showCustomRoleInput && (
                           <div className="mt-3 p-3 bg-white/5 rounded-lg animate-in fade-in">
                             <input
                               type="text"
-                              placeholder="Define your own role..."
+                              placeholder="Paste a persona/role you want the AI to play..."
                               value={pendingCustomRole}
                               onChange={(e) => setPendingCustomRole(e.target.value)}
                               className="w-full px-2 py-2 bg-white/10 border border-white/20 rounded text-xs text-white placeholder-white/30 focus:outline-none focus:border-mcgill-red"

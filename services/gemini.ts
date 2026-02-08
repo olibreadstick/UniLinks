@@ -296,9 +296,10 @@ export const getRoleSuggestions = async (scenario: string) => {
       model: "gemini-3-flash-preview",
       contents:
         `You are designing roleplay personas for a student to practice. ` +
-        `Given this scenario: "${scenario}", generate 4 distinct, realistic roles the AI can play. ` +
-        `Each role should include a short name and a brief behavior descriptor, formatted like: ` +
-        `"Role Name - short behavioral description". ` +
+        `Given this specific event/situation: "${scenario}", generate 6 distinct, realistic people the student would actually meet there. ` +
+        `Make them grounded in the context (e.g., attendee types, organizers, club reps, recruiters, classmates, mentors) rather than generic archetypes. ` +
+        `Each role must be formatted exactly like: "Role Name (who they are) - short behavioral description". ` +
+        `Keep it realistic and varied; include at least 1 friendly, 1 busy/curt, 1 skeptical, and 1 helpful/mentor-like role IF it fits the scenario. ` +
         `Avoid coaching language. Output JSON array of strings.`,
       config: {
         responseMimeType: "application/json",
@@ -511,6 +512,84 @@ Output requirements:
       } satisfies RoleplayFeedback;
     }
     return null;
+  }
+};
+
+export const getLiveRoleplayReplySuggestions = async (params: {
+  scenario: string;
+  role: string;
+  aiSaid: string;
+  recentTranscript?: string;
+  pressure?: number;
+  niceness?: number;
+  formality?: number;
+}) => {
+  try {
+    const ai = getAI();
+
+    const tone = {
+      pressure: levelLabel(params.pressure),
+      niceness: levelLabel(params.niceness),
+      formality: levelLabel(params.formality),
+    };
+
+    const response = await ai.models.generateContent({
+      model: "gemini-3-flash-preview",
+      contents:
+        `You are generating LIVE reply suggestions for a student in a roleplay.
+
+Scenario: "${params.scenario}"
+Other person's role: "${params.role}"
+Tone preferences: pressure=${tone.pressure}, niceness=${tone.niceness}, formality=${tone.formality}
+
+Most recent thing the other person (AI) said:
+"""
+${params.aiSaid}
+"""
+
+Recent transcript (optional, may be incomplete):
+"""
+${params.recentTranscript || ""}
+"""
+
+Task:
+Generate 4 distinct candidate replies the STUDENT can say next.
+
+Constraints:
+- Each suggestion is 1–2 sentences, natural spoken English.
+- Must directly respond to what the AI just said.
+- Include variety: one concise answer, one answer + follow-up question, one clarifying question, one polite redirect.
+- No coaching/meta language (no "as my coach", "in this roleplay", "I’m practicing").
+- Avoid generic filler.
+
+Output:
+Return ONLY a JSON array of strings.`,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.ARRAY,
+          items: { type: Type.STRING },
+        },
+      },
+    });
+
+    const parsed = safeJsonParse<unknown>(response.text, []);
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((x): x is string => typeof x === "string")
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .slice(0, 6);
+  } catch (error) {
+    if (isQuotaError(error)) {
+      return [
+        "That makes sense—could you say a bit more about what you mean by that?",
+        "Got it. For me, the main point is __; does that align with what you’re looking for?",
+        "Thanks—quick clarifier: are you asking about __ or __?",
+        "Totally—before we go deeper, what would be the best next step from here?",
+      ];
+    }
+    return [];
   }
 };
 
