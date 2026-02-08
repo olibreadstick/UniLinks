@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 
 interface Account {
   id: string;
@@ -25,14 +25,15 @@ const Navigation: React.FC<NavProps> = ({
   onCreateAccount,
 }) => {
   const tabs = [
-    { id: 'discover', label: 'Discover', icon: '' },
-    { id: 'coach', label: 'Social Coach', icon: '' },
-    { id: 'community', label: 'McGill Hub', icon: '' },
-    { id: 'profile', label: 'Profile', icon: '👤' },
+    { id: "discover", label: "Discover", icon: "" },
+    { id: "coach", label: "Social Coach", icon: "" },
+    { id: "community", label: "McGill Hub", icon: "" },
+    { id: "calendar", label: "Calendar", icon: "📅" },
+    { id: "profile", label: "Profile", icon: "👤" },
   ];
 
   const activeName =
-    accounts.find(a => a.id === activeAccountId)?.name || 'Select account';
+    accounts.find((a) => a.id === activeAccountId)?.name || "Select account";
 
   return (
     <>
@@ -43,7 +44,9 @@ const Navigation: React.FC<NavProps> = ({
             <div className="w-10 h-10 bg-mcgill-red rounded-xl flex items-center justify-center shadow-lg shadow-red-100">
               <span className="text-white text-xl font-black">U</span>
             </div>
-            <h1 className="text-xl font-black tracking-tighter text-slate-900">UniLinks</h1>
+            <h1 className="text-xl font-black tracking-tighter text-slate-900">
+              UniLinks
+            </h1>
           </div>
           <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-slate-400 pl-1">
             McGill Edition
@@ -57,11 +60,11 @@ const Navigation: React.FC<NavProps> = ({
 
             <div className="flex items-center gap-2">
               <select
-                value={activeAccountId || ''}
+                value={activeAccountId || ""}
                 onChange={(e) => setActiveAccountId(e.target.value)}
                 className="flex-1 px-3 py-2 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 outline-none focus:border-red-200"
               >
-                {accounts.map(acc => (
+                {accounts.map((acc) => (
                   <option key={acc.id} value={acc.id}>
                     {acc.name}
                   </option>
@@ -78,7 +81,8 @@ const Navigation: React.FC<NavProps> = ({
             </div>
 
             <p className="mt-2 text-[10px] text-slate-400 font-medium">
-              Active: <span className="font-black text-slate-600">{activeName}</span>
+              Active:{" "}
+              <span className="font-black text-slate-600">{activeName}</span>
             </p>
           </div>
         </div>
@@ -90,8 +94,8 @@ const Navigation: React.FC<NavProps> = ({
               onClick={() => setActiveTab(tab.id)}
               className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl transition-all font-semibold text-sm ${
                 activeTab === tab.id
-                  ? 'bg-mcgill-red text-white shadow-xl shadow-red-100'
-                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-800'
+                  ? "bg-mcgill-red text-white shadow-xl shadow-red-100"
+                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
               }`}
             >
               <span className="text-lg">{tab.icon}</span>
@@ -107,7 +111,9 @@ const Navigation: React.FC<NavProps> = ({
             </p>
             <div className="flex items-center gap-2">
               <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-              <p className="text-xs font-medium text-slate-600">Active community today</p>
+              <p className="text-xs font-medium text-slate-600">
+                Active community today
+              </p>
             </div>
           </div>
         </div>
@@ -120,12 +126,12 @@ const Navigation: React.FC<NavProps> = ({
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
             className={`flex flex-col items-center gap-1 transition-colors ${
-              activeTab === tab.id ? 'text-mcgill-red' : 'text-slate-400'
+              activeTab === tab.id ? "text-mcgill-red" : "text-slate-400"
             }`}
           >
             <span className="text-xl">{tab.icon}</span>
             <span className="text-[10px] font-bold uppercase tracking-wider">
-              {tab.label.split(' ')[0]}
+              {tab.label.split(" ")[0]}
             </span>
           </button>
         ))}

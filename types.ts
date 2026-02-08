@@ -1,11 +1,10 @@
-
 export enum DiscoveryType {
-  EVENT = 'EVENT',
-  PARTNER = 'PARTNER',
-  CLUB = 'CLUB',
-  COURSE = 'COURSE',
-  NETWORKING = 'NETWORKING',
-  COLLAB_REQUEST = 'COLLAB_REQUEST'
+  EVENT = "EVENT",
+  PARTNER = "PARTNER",
+  CLUB = "CLUB",
+  COURSE = "COURSE",
+  NETWORKING = "NETWORKING",
+  COLLAB_REQUEST = "COLLAB_REQUEST",
 }
 
 export interface UserProfile {
@@ -29,6 +28,10 @@ export interface DiscoveryItem {
   tags: string[];
   matchReason?: string;
   metadata?: any;
+  // optional high-level helpers
+  creator?: UserProfile; // when an individual creates the item
+  company?: string; // fallback/organization name
+  date?: string; // ISO date string for events
 }
 
 export interface CollabRequest extends DiscoveryItem {
@@ -38,7 +41,7 @@ export interface CollabRequest extends DiscoveryItem {
 }
 
 export interface Message {
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
   timestamp: number;
 }
