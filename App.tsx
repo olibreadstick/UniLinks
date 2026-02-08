@@ -281,6 +281,31 @@ const MAX_AVATAR_BYTES = 5_000_000;
     setActiveTab("discover");
   };
 
+  const onToggleInterested = (requestId: string) => {
+    if (!activeAccountId) return;
+
+    setCollabRequests((prev) => {
+      const next = prev.map((r) => {
+        if (r.id !== requestId) return r;
+
+        const participants = Array.isArray(r.participants) ? r.participants : [];
+        const already = participants.includes(activeAccountId);
+
+        return {
+          ...r,
+          participants: already
+            ? participants.filter((id) => id !== activeAccountId)
+            : [...participants, activeAccountId],
+        };
+      });
+
+      // IMPORTANT: persist immediately so other accounts/tabs can see it
+      localStorage.setItem(GLOBAL_COLLABS_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
+
   const toggleArrayItem = (
     field: "skills" | "experience",
     index: number,
@@ -349,6 +374,7 @@ const MAX_AVATAR_BYTES = 5_000_000;
                 onHeart={handleHeart}
                 externalItems={collabRequests}
                 userInterests={userProfile.interests}
+                onToggleInterested={onToggleInterested}
               />
             </div>
           </div>
@@ -760,6 +786,7 @@ const MAX_AVATAR_BYTES = 5_000_000;
             userInterests={userProfile.interests}
             onHeart={handleHeart}
             externalItems={collabRequests}
+            onToggleInterested={onToggleInterested}
           />
         );
     }

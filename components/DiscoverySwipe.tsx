@@ -86,9 +86,10 @@ interface DiscoverySwipeProps {
   onHeart?: (item: DiscoveryItem) => void;
   externalItems?: DiscoveryItem[];
   userInterests: string[];
+  onToggleInterested: (requestId: string) => void;
 }
 
-const DiscoverySwipe: React.FC<DiscoverySwipeProps> = ({ onHeart, externalItems = [], userInterests }) => {
+const DiscoverySwipe: React.FC<DiscoverySwipeProps> = ({ onHeart, externalItems = [], userInterests, onToggleInterested }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [swipeDir, setSwipeDir] = useState<'left' | 'right' | null>(null);
   const [matchReason, setMatchReason] = useState<string>('');
@@ -123,6 +124,9 @@ const DiscoverySwipe: React.FC<DiscoverySwipeProps> = ({ onHeart, externalItems 
   }, [currentIndex, activeCat, activeSub, userInterests]);
 
   const handleSwipe = (direction: 'left' | 'right') => {
+    if (direction === 'right') {
+      onToggleInterested(currentItem.id);
+    }
     if (direction === 'right' && onHeart) {
       onHeart(currentItem);
     }
