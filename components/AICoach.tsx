@@ -1,6 +1,12 @@
 import React, { useState, useRef, useEffect, useMemo } from "react";
 import { GoogleGenAI, LiveServerMessage, Modality, Blob } from "@google/genai";
-import { getSocialIcebreakers } from "../services/gemini";
+import {
+  getCoachGoalSuggestions,
+  getRoleSuggestions,
+  getTryTheseLines,
+  getRoleplayFeedback,
+  type RoleplayFeedback,
+} from "../services/gemini";
 import { DiscoveryItem, DiscoveryType } from "../types";
 
 type Scenario = {
@@ -18,6 +24,7 @@ type CoachSettings = {
   focusOutfit: boolean;
   focusFacialExpressions: boolean;
   strictness: number; // 0-100
+  goal: string;
 };
 
 const JOINED_COURSES_STORAGE_KEY = "mcg_joined_courses";
@@ -49,8 +56,8 @@ const DEFAULT_SCENARIOS: Scenario[] = [
   },
 ];
 
-// Role suggestions based on scenario type
-const getRoleSuggestionsForScenario = (title: string): string[] => {
+// Fallback role suggestions based on scenario type
+const getRoleSuggestionsFallback = (title: string): string[] => {
   const lower = title.toLowerCase();
   if (lower.includes("networking") || lower.includes("mixer") || lower.includes("desautels")) {
     return [
@@ -100,6 +107,22 @@ interface AICoachProps {
 }
 
 const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
+  const getGoalPriorityHints = (goal: string): string => {
+    const g = goal.toLowerCase();
+    if (g.includes("pitch") || g.includes("present") || g.includes("demo")) {
+      return "Prioritize confident delivery: upright posture, steady gaze, controlled gestures, clear pacing, and energetic facial expression.";
+    }
+    if (g.includes("interview") || g.includes("behavior")) {
+      return "Prioritize professional presence: calm posture, minimal fidgeting, steady eye contact, and a composed, confident facial expression.";
+    }
+    if (g.includes("network") || g.includes("social") || g.includes("approach") || g.includes("small talk")) {
+      return "Prioritize approachability: open posture, warm smile, friendly eye contact, and relaxed shoulders; keep tone light and inviting.";
+    }
+    if (g.includes("strict") || g.includes("tough")) {
+      return "Be extra direct and specific. Point out one clear improvement at a time and ask for an immediate retry.";
+    }
+    return "Tailor your feedback to the goal with specific, observable cues from camera presence and delivery.";
+  };
   const likedItemScenarios: Scenario[] = useMemo(() => {
     return heartedItems.map((item) => ({
       id: `like_${item.id}`,
@@ -190,6 +213,9 @@ const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
     return likedItemScenarios[0] ?? courseSuggestionScenarios[0] ?? DEFAULT_SCENARIOS[0]!;
   });
   const [icebreakers, setIcebreakers] = useState<string[]>([]);
+  const [isTryLinesLoading, setIsTryLinesLoading] = useState(false);
+  const [roleplayFeedback, setRoleplayFeedbackState] = useState<RoleplayFeedback | null>(null);
+  const [isRoleplayFeedbackLoading, setIsRoleplayFeedbackLoading] = useState(false);
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [status, setStatus] = useState<string>("Ready to practice?");
   const [isQuotaFull, setIsQuotaFull] = useState(false);
@@ -201,6 +227,7 @@ const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
     focusOutfit: true,
     focusFacialExpressions: true,
     strictness: 55,
+    goal: "",
   });
 
   const [pendingCoachSettings, setPendingCoachSettings] = useState<CoachSettings>({
@@ -208,13 +235,46 @@ const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
     focusOutfit: true,
     focusFacialExpressions: true,
     strictness: 55,
+    goal: "",
   });
 
   const hasPendingCoachChanges =
     pendingCoachSettings.focusBodyLanguage !== coachSettings.focusBodyLanguage ||
     pendingCoachSettings.focusOutfit !== coachSettings.focusOutfit ||
     pendingCoachSettings.focusFacialExpressions !== coachSettings.focusFacialExpressions ||
-    pendingCoachSettings.strictness !== coachSettings.strictness;
+    pendingCoachSettings.strictness !== coachSettings.strictness ||
+    pendingCoachSettings.goal !== coachSettings.goal;
+
+  const coachGoalTouchedRef = useRef(false);
+  const [coachGoalSuggestions, setCoachGoalSuggestionsState] = useState<string[]>([]);
+  const [isCoachGoalsLoading, setIsCoachGoalsLoading] = useState(false);
+
+  useEffect(() => {
+    let alive = true;
+    coachGoalTouchedRef.current = false;
+    setIsCoachGoalsLoading(true);
+    setCoachGoalSuggestionsState([]);
+
+    (async () => {
+      const goals = await getCoachGoalSuggestions(selectedScenario.title);
+      if (!alive) return;
+      const next = (goals || []).filter(Boolean).slice(0, 3);
+      const fallback = next.length ? next : [
+        "Start with a confident, specific introduction.",
+        "Ask 2 strong follow-up questions.",
+        "Improve posture and eye contact on camera.",
+      ];
+      setCoachGoalSuggestionsState(fallback);
+      const nextDefault = fallback[0] ?? "";
+      setCoachSettings((prev) => ({ ...prev, goal: prev.goal || nextDefault }));
+      setPendingCoachSettings((prev) => ({ ...prev, goal: prev.goal || nextDefault }));
+      setIsCoachGoalsLoading(false);
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, [selectedScenario.title]);
 
   useEffect(() => {
     if (selectedScenario.isCustom) return;
@@ -246,7 +306,24 @@ const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
   const [pendingRole, setPendingRole] = useState<string>("");
   const [pendingCustomRole, setPendingCustomRole] = useState("");
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [aiPulse, setAiPulse] = useState(0);
+  const [isUserSpeaking, setIsUserSpeaking] = useState(false);
+  const [userLevel, setUserLevel] = useState(0);
   const [isLoading, setIsLoading] = useState(false);
+  const [sideCollapsed, setSideCollapsed] = useState<Record<string, boolean>>({
+    mode: false,
+    ice: false,
+    goal: false,
+    coach: false,
+    role: false,
+    personality: false,
+    apply: false,
+    feedback: false,
+    pending: false,
+    active: false,
+  });
+
+  const [coachLiveRequest, setCoachLiveRequest] = useState("");
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -256,12 +333,55 @@ const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
   const isSpeakingRef = useRef<boolean>(false);
   const ignoreAudioUntilRef = useRef<number>(0);
+  const outputAnalyserRef = useRef<AnalyserNode | null>(null);
+  const aiPulseRafRef = useRef<number | null>(null);
+  const userSpeakingUntilRef = useRef<number>(0);
   const roleStateRef = useRef({ selectedRole, customRole, pressure: personalitySettings.pressure, niceness: personalitySettings.niceness, formality: personalitySettings.formality });
+
+  const roleplayCaptureRef = useRef({
+    startedAt: 0,
+    interruptions: 0,
+    speakingSegments: [] as Array<{ startMs: number; endMs: number; avgLevel: number; peakLevel: number }>,
+    segActive: false,
+    segStartMs: 0,
+    segLevelSum: 0,
+    segSamples: 0,
+    segPeak: 0,
+    snapshots: [] as Array<{ tsMs: number; mimeType: string; dataBase64: string }>,
+    lastSnapshotAtMs: 0,
+    transcript: [] as Array<{ tsMs: number; who: "user" | "ai"; text: string }>,
+  });
+
+  const resetRoleplayCapture = () => {
+    roleplayCaptureRef.current = {
+      startedAt: Date.now(),
+      interruptions: 0,
+      speakingSegments: [],
+      segActive: false,
+      segStartMs: 0,
+      segLevelSum: 0,
+      segSamples: 0,
+      segPeak: 0,
+      snapshots: [],
+      lastSnapshotAtMs: 0,
+      transcript: [],
+    };
+    setRoleplayFeedbackState(null);
+  };
 
   const setSpeakingState = (value: boolean) => {
     isSpeakingRef.current = value;
     setIsSpeaking(value);
   };
+
+  const toggleSide = (key: string) => {
+    setSideCollapsed((prev) => ({ ...prev, [key]: !prev[key] }));
+  };
+
+  const sideHeaderClass =
+    "w-full flex items-center justify-between px-4 py-3 rounded-2xl bg-white/5 hover:bg-white/10 border border-white/10 transition-colors";
+  const sideHeaderCaretClass = (collapsed: boolean) =>
+    "text-white/60 text-sm transition-transform " + (collapsed ? "rotate-180" : "");
 
   useEffect(() => {
     practiceModeRef.current = practiceMode;
@@ -273,6 +393,155 @@ const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
 
   const pendingPersonaText = pendingCustomRole.trim() || pendingRole;
   const activePersonaText = customRole.trim() || selectedRole;
+
+  useEffect(() => {
+    let alive = true;
+    const scenarioContext = selectedScenario.desc
+      ? `${selectedScenario.title} — ${selectedScenario.desc}`
+      : selectedScenario.title;
+
+    // Small debounce so sliders/rapid changes don't spam requests
+    setIsTryLinesLoading(true);
+    const handle = window.setTimeout(() => {
+      (async () => {
+        const lines = await getTryTheseLines({
+          scenario: scenarioContext,
+          mode: practiceMode,
+          role: practiceMode === "roleplay" ? pendingPersonaText : undefined,
+          goal: practiceMode === "coach" ? pendingCoachSettings.goal : undefined,
+          pressure: pendingSettings.pressure,
+          niceness: pendingSettings.niceness,
+          formality: pendingSettings.formality,
+        });
+
+        if (!alive) return;
+        if (Array.isArray(lines) && lines.length > 0) setIcebreakers(lines);
+        setIsTryLinesLoading(false);
+      })();
+    }, 350);
+
+    return () => {
+      alive = false;
+      window.clearTimeout(handle);
+    };
+  }, [
+    selectedScenario.title,
+    selectedScenario.desc,
+    practiceMode,
+    pendingPersonaText,
+    pendingCoachSettings.goal,
+    pendingSettings.pressure,
+    pendingSettings.niceness,
+    pendingSettings.formality,
+  ]);
+
+  // Best-effort user transcript (Chrome/WebKit). Used only for roleplay feedback.
+  useEffect(() => {
+    if (!(step === "active" && isSessionActive && practiceMode === "roleplay")) return;
+
+    const SR: any = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) return;
+
+    let alive = true;
+    const recognition = new SR();
+    recognition.continuous = true;
+    recognition.interimResults = false;
+    recognition.lang = "en-US";
+
+    recognition.onresult = (event: any) => {
+      if (!alive) return;
+      try {
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const res = event.results[i];
+          if (!res?.isFinal) continue;
+          const text = String(res[0]?.transcript || "").trim();
+          if (!text) continue;
+          roleplayCaptureRef.current.transcript.push({ tsMs: Date.now(), who: "user", text });
+          // Keep it bounded
+          if (roleplayCaptureRef.current.transcript.length > 80) {
+            roleplayCaptureRef.current.transcript.splice(0, roleplayCaptureRef.current.transcript.length - 80);
+          }
+        }
+      } catch {
+        // ignore
+      }
+    };
+
+    recognition.onend = () => {
+      // Chrome sometimes ends recognition unexpectedly; restart while active
+      if (!alive) return;
+      try {
+        recognition.start();
+      } catch {
+        // ignore
+      }
+    };
+
+    try {
+      recognition.start();
+    } catch {
+      // ignore
+    }
+
+    return () => {
+      alive = false;
+      try {
+        recognition.stop();
+      } catch {
+        // ignore
+      }
+    };
+  }, [step, isSessionActive, practiceMode]);
+
+  const getRoleplayObservationsSummary = () => {
+    const c = roleplayCaptureRef.current;
+    const durSec = c.startedAt ? Math.max(0, (Date.now() - c.startedAt) / 1000) : 0;
+    const segments = c.speakingSegments;
+    const totalSpeakingSec = segments.reduce((acc, s) => acc + Math.max(0, (s.endMs - s.startMs) / 1000), 0);
+    const avgLevel = segments.length
+      ? segments.reduce((acc, s) => acc + (s.avgLevel || 0), 0) / segments.length
+      : 0;
+    const peakLevel = segments.reduce((acc, s) => Math.max(acc, s.peakLevel || 0), 0);
+    return [
+      `sessionSeconds=${durSec.toFixed(1)}`,
+      `userSpeakingSegments=${segments.length}`,
+      `userSpeakingSeconds=${totalSpeakingSec.toFixed(1)}`,
+      `avgUserLevel(0-1)=${avgLevel.toFixed(2)}`,
+      `peakUserLevel(0-1)=${peakLevel.toFixed(2)}`,
+      `userInterruptedAI=${c.interruptions}`,
+      `snapshotsCaptured=${c.snapshots.length}`,
+      `transcriptTurns=${c.transcript.length}`,
+    ].join("\n");
+  };
+
+  const handleGetRoleplayFeedback = async () => {
+    if (!(practiceModeRef.current === "roleplay")) return;
+
+    setIsRoleplayFeedbackLoading(true);
+    try {
+      const scenarioContext = selectedScenario.desc
+        ? `${selectedScenario.title} — ${selectedScenario.desc}`
+        : selectedScenario.title;
+
+      const c = roleplayCaptureRef.current;
+      const transcriptText = c.transcript
+        .slice(-50)
+        .map((t) => `${t.who === "user" ? "USER" : "AI"}: ${t.text}`)
+        .join("\n");
+
+      const feedback = await getRoleplayFeedback({
+        scenario: scenarioContext,
+        role: activePersonaText || pendingPersonaText || "(unspecified role)",
+        transcript: transcriptText,
+        observations: getRoleplayObservationsSummary(),
+        snapshots: c.snapshots.slice(-3),
+      });
+
+      setRoleplayFeedbackState(feedback);
+    } finally {
+      setIsRoleplayFeedbackLoading(false);
+    }
+  };
   const hasPendingChanges =
     pendingRole !== selectedRole ||
     pendingCustomRole !== customRole ||
@@ -282,15 +551,29 @@ const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
 
   // Generate role options when scenario changes
   useEffect(() => {
-    const roles = getRoleSuggestionsForScenario(selectedScenario.title);
-    setRoleOptions(roles);
-    setSelectedRole(roles[0]);
+    let alive = true;
+    setRoleOptions([]);
+
+    (async () => {
+      const roles = await getRoleSuggestions(selectedScenario.title);
+      if (!alive) return;
+      const next = (roles || []).filter(Boolean);
+      const fallback = next.length ? next : getRoleSuggestionsFallback(selectedScenario.title);
+      setRoleOptions(fallback);
+      setSelectedRole(fallback[0]);
+
+      // Reset pending to match applied defaults for new scenario
+      setPendingRole(fallback[0]);
+      setPendingCustomRole("");
+      setShowCustomRoleInput(false);
+    })();
+
+    return () => {
+      alive = false;
+    };
+
     setCustomRole("");
     setShowCustomRoleInput(false);
-
-    // Reset pending to match applied defaults for new scenario
-    setPendingRole(roles[0]);
-    setPendingCustomRole("");
   }, [selectedScenario]);
 
   const applyChanges = () => {
@@ -397,9 +680,14 @@ Keep the dialogue natural and responsive. Reference McGill/campus context when r
         ? "direct but encouraging"
         : "highly critical, precise, and improvement-focused";
 
+    const goalText = (coachSettings.goal || "").trim() || "Improve my communication and camera presence";
+    const goalHints = getGoalPriorityHints(goalText);
+
     return `You are an AI Coach for a McGill student practicing for "${selectedScenario.title}".
 Your job is to give real-time coaching and actionable feedback based on their camera presence and communication.
 Focus on: ${focusText}.
+Primary goal: "${goalText}".
+${goalHints}
 Your coaching tone should be ${strictnessDesc}.
 Give short, specific feedback (1-3 bullets worth) and one concrete next action at a time.
 Do NOT roleplay as a recruiter/friend/stranger; you are strictly a coach.`;
@@ -430,6 +718,20 @@ Do NOT roleplay as a recruiter/friend/stranger; you are strictly a coach.`;
       setTimeout(() => {
         startSession("coach");
       }, 600);
+    }
+  };
+
+  const sendCoachLiveRequest = () => {
+    const text = coachLiveRequest.trim();
+    if (!text) return;
+    setCoachLiveRequest("");
+    try {
+      sessionRef.current?.sendClientContent({
+        turns: `Coach request: ${text}`,
+        turnComplete: true,
+      });
+    } catch {
+      // ignore
     }
   };
 
@@ -543,6 +845,10 @@ Do NOT roleplay as a recruiter/friend/stranger; you are strictly a coach.`;
 
       const modeToUse = forcedMode ?? practiceModeRef.current;
 
+      if (modeToUse === "roleplay") {
+        resetRoleplayCapture();
+      }
+
       // Reset any playback scheduling from prior sessions
       nextStartTimeRef.current = 0;
       sourcesRef.current.forEach((src) => {
@@ -553,10 +859,6 @@ Do NOT roleplay as a recruiter/friend/stranger; you are strictly a coach.`;
         }
       });
       sourcesRef.current.clear();
-      
-      // Fetch icebreakers when session starts
-      const ice = await getSocialIcebreakers(selectedScenario.title);
-      setIcebreakers(ice);
       
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -586,6 +888,42 @@ Do NOT roleplay as a recruiter/friend/stranger; you are strictly a coach.`;
         // ignore
       }
 
+      // FaceTime-style pulse: analyse actual AI playback amplitude
+      const outputAnalyser = outputCtx.createAnalyser();
+      outputAnalyser.fftSize = 256;
+      outputAnalyser.smoothingTimeConstant = 0.6;
+      outputAnalyser.connect(outputCtx.destination);
+      outputAnalyserRef.current = outputAnalyser;
+
+      if (aiPulseRafRef.current != null) {
+        cancelAnimationFrame(aiPulseRafRef.current);
+        aiPulseRafRef.current = null;
+      }
+      const timeData = new Uint8Array(outputAnalyser.frequencyBinCount);
+      let lastUiUpdate = 0;
+      const tick = (t: number) => {
+        aiPulseRafRef.current = requestAnimationFrame(tick);
+        if (t - lastUiUpdate < 33) return; // ~30fps
+        lastUiUpdate = t;
+
+        const aiIsSpeakingNow = isSpeakingRef.current || sourcesRef.current.size > 0;
+        if (!aiIsSpeakingNow) {
+          setAiPulse((p) => (p > 0.02 ? p * 0.75 : 0));
+          return;
+        }
+
+        outputAnalyser.getByteTimeDomainData(timeData);
+        let sumSq = 0;
+        for (let i = 0; i < timeData.length; i++) {
+          const v = (timeData[i] - 128) / 128;
+          sumSq += v * v;
+        }
+        const rms = Math.sqrt(sumSq / timeData.length);
+        const normalized = Math.min(1, rms * 3.2);
+        setAiPulse((prev) => Math.max(normalized, prev * 0.85));
+      };
+      aiPulseRafRef.current = requestAnimationFrame(tick);
+
       const sessionPromise = ai.live.connect({
         model: "gemini-2.5-flash-native-audio-preview-12-2025",
         callbacks: {
@@ -596,6 +934,7 @@ Do NOT roleplay as a recruiter/friend/stranger; you are strictly a coach.`;
             const source = inputCtx.createMediaStreamSource(stream);
             const scriptProcessor = inputCtx.createScriptProcessor(4096, 1, 1);
             let lastInterruptTime = 0;
+            let lastUserUiUpdate = 0;
             const INTERRUPT_COOLDOWN = 300; // ms between interrupts
             const MIN_RMS_THRESHOLD = 0.018;
             const MIN_PEAK_THRESHOLD = 0.12;
@@ -629,16 +968,69 @@ Do NOT roleplay as a recruiter/friend/stranger; you are strictly a coach.`;
               const dynamicPeakThreshold = Math.max(MIN_PEAK_THRESHOLD, noisePeak * 3);
               const userIsSpeaking = rms > dynamicRmsThreshold || peakAbs > dynamicPeakThreshold;
 
+              const rawLevel = Math.max(
+                rms / Math.max(1e-6, dynamicRmsThreshold * 2.2),
+                peakAbs / Math.max(1e-6, dynamicPeakThreshold * 1.8),
+              );
+              const normalizedLevel = Math.max(0, Math.min(1, rawLevel));
+
+              // Update "user speaking" UI with a short hold to reduce flicker
+              const nowMs = Date.now();
+              if (userIsSpeaking) userSpeakingUntilRef.current = nowMs + 250;
+              if (nowMs - lastUserUiUpdate > 90) {
+                lastUserUiUpdate = nowMs;
+                setIsUserSpeaking(nowMs < userSpeakingUntilRef.current);
+                setUserLevel((prev) => {
+                  if (nowMs < userSpeakingUntilRef.current) {
+                    return Math.max(normalizedLevel, prev * 0.7);
+                  }
+                  return prev * 0.6;
+                });
+              }
+
               if (userIsSpeaking && aiIsSpeakingNow) {
                 speechFrames += 1;
               } else {
                 speechFrames = 0;
               }
 
+              // Roleplay capture: speaking segments + basic delivery level stats
+              if (practiceModeRef.current === "roleplay") {
+                const cap = roleplayCaptureRef.current;
+                if (userIsSpeaking) {
+                  if (!cap.segActive) {
+                    cap.segActive = true;
+                    cap.segStartMs = nowMs;
+                    cap.segLevelSum = 0;
+                    cap.segSamples = 0;
+                    cap.segPeak = 0;
+                  }
+                  cap.segLevelSum += normalizedLevel;
+                  cap.segSamples += 1;
+                  cap.segPeak = Math.max(cap.segPeak, normalizedLevel);
+                } else if (cap.segActive) {
+                  cap.segActive = false;
+                  const avg = cap.segSamples ? cap.segLevelSum / cap.segSamples : 0;
+                  cap.speakingSegments.push({
+                    startMs: cap.segStartMs,
+                    endMs: nowMs,
+                    avgLevel: avg,
+                    peakLevel: cap.segPeak,
+                  });
+                  if (cap.speakingSegments.length > 40) {
+                    cap.speakingSegments.splice(0, cap.speakingSegments.length - 40);
+                  }
+                }
+              }
+
               if (speechFrames >= 2) {
                 const now = Date.now();
                 if (now - lastInterruptTime > INTERRUPT_COOLDOWN) {
                   lastInterruptTime = now;
+
+                  if (practiceModeRef.current === "roleplay") {
+                    roleplayCaptureRef.current.interruptions += 1;
+                  }
 
                   // Briefly ignore incoming audio chunks after interrupt so the AI doesn't
                   // "keep talking" due to already-in-flight server audio.
@@ -694,6 +1086,22 @@ Do NOT roleplay as a recruiter/friend/stranger; you are strictly a coach.`;
                         const base64Data = (reader.result as string).split(
                           ",",
                         )[1];
+
+                        // Save a few snapshots during roleplay while user is speaking (for feedback)
+                        if (practiceModeRef.current === "roleplay") {
+                          const nowMs = Date.now();
+                          const userRecentlySpeaking = nowMs < userSpeakingUntilRef.current;
+                          const cap = roleplayCaptureRef.current;
+                          const canTake =
+                            userRecentlySpeaking &&
+                            nowMs - cap.lastSnapshotAtMs > 6000 &&
+                            cap.snapshots.length < 4;
+                          if (canTake && base64Data) {
+                            cap.lastSnapshotAtMs = nowMs;
+                            cap.snapshots.push({ tsMs: nowMs, mimeType: "image/jpeg", dataBase64: base64Data });
+                          }
+                        }
+
                         sessionPromise.then((s) =>
                           s.sendRealtimeInput({
                             media: { data: base64Data, mimeType: "image/jpeg" },
@@ -714,6 +1122,18 @@ Do NOT roleplay as a recruiter/friend/stranger; you are strictly a coach.`;
             if (Date.now() < ignoreAudioUntilRef.current) return;
 
             const parts = message.serverContent?.modelTurn?.parts || [];
+            const textParts = parts
+              .map((p: any) => (typeof p?.text === "string" ? p.text : ""))
+              .map((t: string) => t.trim())
+              .filter(Boolean);
+            if (practiceModeRef.current === "roleplay" && textParts.length) {
+              const cap = roleplayCaptureRef.current;
+              const combined = textParts.join(" ");
+              cap.transcript.push({ tsMs: Date.now(), who: "ai", text: combined });
+              if (cap.transcript.length > 80) {
+                cap.transcript.splice(0, cap.transcript.length - 80);
+              }
+            }
             const audioParts = parts.filter((p: any) =>
               p?.inlineData?.data &&
               (p?.inlineData?.mimeType?.startsWith?.("audio/") ||
@@ -737,7 +1157,7 @@ Do NOT roleplay as a recruiter/friend/stranger; you are strictly a coach.`;
               if (Date.now() < ignoreAudioUntilRef.current) return;
               const source = outputCtx.createBufferSource();
               source.buffer = audioBuffer;
-              source.connect(outputCtx.destination);
+              source.connect(outputAnalyser);
               source.start(nextStartTimeRef.current);
               nextStartTimeRef.current += audioBuffer.duration;
               sourcesRef.current.add(source);
@@ -792,6 +1212,15 @@ Do NOT roleplay as a recruiter/friend/stranger; you are strictly a coach.`;
 
     ignoreAudioUntilRef.current = 0;
     isSpeakingRef.current = false;
+
+    if (aiPulseRafRef.current != null) {
+      cancelAnimationFrame(aiPulseRafRef.current);
+      aiPulseRafRef.current = null;
+    }
+    outputAnalyserRef.current = null;
+    setAiPulse(0);
+    setIsUserSpeaking(false);
+    setUserLevel(0);
 
     nextStartTimeRef.current = 0;
     sourcesRef.current.forEach((src) => {
@@ -1115,7 +1544,7 @@ Do NOT roleplay as a recruiter/friend/stranger; you are strictly a coach.`;
           </div>
         ) : (
           <>
-            <div className="flex-[2] relative bg-black min-h-0">
+            <div className={`flex-[2] relative bg-black min-h-0 ${isUserSpeaking ? "ring-4 ring-white/40" : ""}`}>
               <video
                 ref={videoRef}
                 autoPlay
@@ -1125,6 +1554,26 @@ Do NOT roleplay as a recruiter/friend/stranger; you are strictly a coach.`;
               />
               <canvas ref={canvasRef} className="hidden" />
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent pointer-events-none" />
+
+              {/* FaceTime-style AI pulse tile */}
+              <div
+                className={
+                  "absolute top-6 right-6 w-32 h-32 bg-black/40 backdrop-blur-md rounded-3xl border flex items-center justify-center transition-all " +
+                  (isSpeaking
+                    ? "border-mcgill-red/70 ring-4 ring-mcgill-red/25"
+                    : "border-white/20")
+                }
+              >
+                <div
+                  className="w-12 h-12 rounded-full bg-mcgill-red"
+                  style={{
+                    transform: `scale(${1 + (isSpeaking ? aiPulse : aiPulse * 0.25) * 0.9})`,
+                    opacity: isSpeaking ? 0.9 : 0.35,
+                    transition: "transform 80ms linear, opacity 120ms ease",
+                  }}
+                />
+              </div>
+
               {/* Speaking Animation Overlay */}
               {isSpeaking && (
                 <div className="absolute inset-0 animate-pulse pointer-events-none">
@@ -1137,27 +1586,43 @@ Do NOT roleplay as a recruiter/friend/stranger; you are strictly a coach.`;
 
                 {/* Amplitude Visualizer */}
                 <div className="flex items-end gap-0.5 h-4" aria-hidden="true">
-                  {[0, 1, 2, 3, 4].map((i) => (
-                    <div
-                      key={i}
-                      className={
-                        `w-0.5 rounded-full ` +
-                        (isSpeaking
-                          ? "bg-mcgill-red animate-bounce"
-                          : "bg-slate-400")
-                      }
-                      style={{
-                        height: isSpeaking
-                          ? [6, 14, 10, 16, 8][i]
-                          : [4, 6, 5, 6, 4][i],
-                        animationDelay: `${i * 0.08}s`,
-                        animationDuration: isSpeaking ? "0.6s" : undefined,
-                      }}
-                    />
-                  ))}
+                  {isUserSpeaking ? (
+                    [0, 1, 2, 3, 4].map((i) => {
+                      const multipliers = [0.55, 1.0, 0.75, 1.15, 0.65];
+                      const base = 4;
+                      const maxAdd = 14;
+                      const height = base + Math.round(userLevel * maxAdd * multipliers[i]!);
+                      return (
+                        <div
+                          key={i}
+                          className="w-0.5 rounded-full bg-white"
+                          style={{ height }}
+                        />
+                      );
+                    })
+                  ) : (
+                    [0, 1, 2, 3, 4].map((i) => (
+                      <div
+                        key={i}
+                        className={
+                          `w-0.5 rounded-full ` +
+                          (isSpeaking
+                            ? "bg-mcgill-red animate-bounce"
+                            : "bg-slate-400")
+                        }
+                        style={{
+                          height: isSpeaking
+                            ? [6, 14, 10, 16, 8][i]
+                            : [4, 6, 5, 6, 4][i],
+                          animationDelay: `${i * 0.08}s`,
+                          animationDuration: isSpeaking ? "0.6s" : undefined,
+                        }}
+                      />
+                    ))
+                  )}
                 </div>
 
-                <span>{isSpeaking ? 'Speaking' : 'Listening'}</span>
+                <span>{isUserSpeaking ? 'You' : isSpeaking ? 'Speaking' : 'Listening'}</span>
               </div>
             </div>
             <div className="flex-1 bg-slate-800/50 p-8 flex flex-col overflow-hidden relative min-h-0">
@@ -1174,144 +1639,273 @@ Do NOT roleplay as a recruiter/friend/stranger; you are strictly a coach.`;
               >
               {/* Mode Switch */}
               <div className="mb-8">
-                <span className="text-[10px] font-black text-mcgill-red uppercase tracking-[0.3em] mb-3 block">
-                  🧭 Practice Mode
-                </span>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={() => setModeAndRestart("coach")}
-                    className={`px-3 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all border ${
-                      practiceMode === "coach"
-                        ? "bg-mcgill-red text-white border-mcgill-red"
-                        : "bg-white/5 text-white/70 border-white/10 hover:border-white/30"
-                    }`}
-                  >
-                    Coach
-                  </button>
-                  <button
-                    onClick={() => setModeAndRestart("roleplay")}
-                    className={`px-3 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all border ${
-                      practiceMode === "roleplay"
-                        ? "bg-mcgill-red text-white border-mcgill-red"
-                        : "bg-white/5 text-white/70 border-white/10 hover:border-white/30"
-                    }`}
-                  >
-                    Roleplay
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => toggleSide("mode")}
+                  aria-expanded={!sideCollapsed.mode}
+                  className={`${sideHeaderClass} text-white/85 text-xs font-black uppercase tracking-[0.25em] mb-3`}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-mcgill-red" />
+                    <span>🧭 Practice Mode</span>
+                  </span>
+                  <span className={sideHeaderCaretClass(sideCollapsed.mode)}>
+                    ▾
+                  </span>
+                </button>
+                {!sideCollapsed.mode && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setModeAndRestart("coach")}
+                      className={`px-3 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all border ${
+                        practiceMode === "coach"
+                          ? "bg-mcgill-red text-white border-mcgill-red"
+                          : "bg-white/5 text-white/70 border-white/10 hover:border-white/30"
+                      }`}
+                    >
+                      Coach
+                    </button>
+                    <button
+                      onClick={() => setModeAndRestart("roleplay")}
+                      className={`px-3 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all border ${
+                        practiceMode === "roleplay"
+                          ? "bg-mcgill-red text-white border-mcgill-red"
+                          : "bg-white/5 text-white/70 border-white/10 hover:border-white/30"
+                      }`}
+                    >
+                      Roleplay
+                    </button>
+                  </div>
+                )}
               </div>
 
               {/* Icebreakers Section */}
               <div className="mb-8">
-                <span className="text-[10px] font-black text-mcgill-red uppercase tracking-[0.3em] mb-3 block">
-                  💬 Try These Lines
-                </span>
-                <div className="space-y-2">
-                  {icebreakers.length > 0 ? (
-                    icebreakers.map((ice, i) => (
-                      <div key={i} className="bg-white/5 border border-white/10 p-3 rounded-lg">
-                        <p className="text-xs text-white/80 italic leading-relaxed">"{ice}"</p>
-                      </div>
-                    ))
-                  ) : (
-                    <p className="text-xs text-slate-400 animate-pulse">Loading conversation starters...</p>
-                  )}
-                </div>
+                <button
+                  type="button"
+                  onClick={() => toggleSide("ice")}
+                  aria-expanded={!sideCollapsed.ice}
+                  className={`${sideHeaderClass} text-white/85 text-xs font-black uppercase tracking-[0.25em] mb-3`}
+                >
+                  <span className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-mcgill-red" />
+                    <span>💬 Try These Lines</span>
+                  </span>
+                  <span className={sideHeaderCaretClass(sideCollapsed.ice)}>
+                    ▾
+                  </span>
+                </button>
+                {!sideCollapsed.ice && (
+                  <div className="space-y-2">
+                    {icebreakers.length > 0 ? (
+                      icebreakers.map((ice, i) => (
+                        <div key={i} className="bg-white/5 border border-white/10 p-3 rounded-lg">
+                          <p className="text-xs text-white/80 italic leading-relaxed">"{ice}"</p>
+                        </div>
+                      ))
+                    ) : (
+                      <p className="text-xs text-slate-400 animate-pulse">
+                        {isTryLinesLoading ? "Generating tailored lines..." : "Generating tailored lines..."}
+                      </p>
+                    )}
+                  </div>
+                )}
               </div>
 
               {practiceMode === "coach" && (
                 <div className="mb-8">
-                  <span className="text-[10px] font-black text-mcgill-red uppercase tracking-[0.3em] mb-3 block">
-                    🧑‍🏫 Coach Focus
-                  </span>
-
-                  <div className="space-y-2">
+                  {/* Coach Goal */}
+                  <div className="mb-6">
                     <button
-                      onClick={() =>
-                        setPendingCoachSettings((prev) => ({
-                          ...prev,
-                          focusBodyLanguage: !prev.focusBodyLanguage,
-                        }))
-                      }
-                      className={`w-full px-3 py-2 rounded-lg text-xs font-bold transition-all text-left border ${
-                        pendingCoachSettings.focusBodyLanguage
-                          ? "bg-mcgill-red text-white border-mcgill-red"
-                          : "bg-white/5 text-white/70 border-white/10 hover:border-white/30"
-                      }`}
+                      type="button"
+                      onClick={() => toggleSide("goal")}
+                      aria-expanded={!sideCollapsed.goal}
+                      className={`${sideHeaderClass} text-white/85 text-xs font-black uppercase tracking-[0.25em] mb-3`}
                     >
-                      Body language
+                      <span className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-mcgill-red" />
+                        <span>🎯 Goal</span>
+                      </span>
+                      <span className={sideHeaderCaretClass(sideCollapsed.goal)}>▾</span>
                     </button>
 
-                    <button
-                      onClick={() =>
-                        setPendingCoachSettings((prev) => ({
-                          ...prev,
-                          focusOutfit: !prev.focusOutfit,
-                        }))
-                      }
-                      className={`w-full px-3 py-2 rounded-lg text-xs font-bold transition-all text-left border ${
-                        pendingCoachSettings.focusOutfit
-                          ? "bg-mcgill-red text-white border-mcgill-red"
-                          : "bg-white/5 text-white/70 border-white/10 hover:border-white/30"
-                      }`}
-                    >
-                      Outfit & presentation
-                    </button>
+                    {!sideCollapsed.goal && (
+                      <>
+                        <div className="space-y-2">
+                          {isCoachGoalsLoading ? (
+                            <p className="text-xs text-slate-400 animate-pulse">Generating goal suggestions...</p>
+                          ) : (
+                            coachGoalSuggestions.slice(0, 3).map((g) => (
+                              <button
+                                key={g}
+                                onClick={() => {
+                                  coachGoalTouchedRef.current = true;
+                                  setPendingCoachSettings((prev) => ({ ...prev, goal: g }));
+                                }}
+                                className={`w-full px-3 py-2 rounded-lg text-xs font-bold transition-all text-left border ${
+                                  pendingCoachSettings.goal === g
+                                    ? "bg-mcgill-red text-white border-mcgill-red"
+                                    : "bg-white/5 text-white/70 border-white/10 hover:border-white/30"
+                                }`}
+                              >
+                                {g}
+                              </button>
+                            ))
+                          )}
+                        </div>
 
-                    <button
-                      onClick={() =>
-                        setPendingCoachSettings((prev) => ({
-                          ...prev,
-                          focusFacialExpressions: !prev.focusFacialExpressions,
-                        }))
-                      }
-                      className={`w-full px-3 py-2 rounded-lg text-xs font-bold transition-all text-left border ${
-                        pendingCoachSettings.focusFacialExpressions
-                          ? "bg-mcgill-red text-white border-mcgill-red"
-                          : "bg-white/5 text-white/70 border-white/10 hover:border-white/30"
-                      }`}
-                    >
-                      Facial expressions
-                    </button>
+                        <div className="mt-3">
+                          <label className="block text-[9px] text-white/70 font-bold mb-2">Refine / custom goal</label>
+                          <input
+                            type="text"
+                            value={pendingCoachSettings.goal}
+                            onChange={(e) => {
+                              coachGoalTouchedRef.current = true;
+                              setPendingCoachSettings((prev) => ({ ...prev, goal: e.target.value }));
+                            }}
+                            placeholder="E.g., be more confident when pitching; reduce fidgeting; sound warmer"
+                            className="w-full px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-xs text-white placeholder-white/30 focus:outline-none focus:border-mcgill-red"
+                          />
+                          <p className="mt-2 text-[10px] text-white/40">
+                            This goal is used to tailor what the coach focuses on.
+                          </p>
+                        </div>
+                      </>
+                    )}
                   </div>
 
-                  <div className="mt-4">
-                    <div className="flex justify-between items-center mb-2">
-                      <label className="text-[9px] text-white/70 font-bold">Coach Strictness</label>
-                      <span className="text-[9px] font-bold text-mcgill-red">{pendingCoachSettings.strictness}%</span>
-                    </div>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={pendingCoachSettings.strictness}
-                      onChange={(e) =>
-                        setPendingCoachSettings((prev) => ({
-                          ...prev,
-                          strictness: parseInt(e.target.value),
-                        }))
-                      }
-                      className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-mcgill-red"
-                    />
-                    <div className="flex justify-between text-[8px] text-white/40 mt-1">
-                      <span>Gentle</span>
-                      <span>Direct</span>
-                    </div>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleSide("coach")}
+                    aria-expanded={!sideCollapsed.coach}
+                    className={`${sideHeaderClass} text-white/85 text-xs font-black uppercase tracking-[0.25em] mb-3`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-mcgill-red" />
+                      <span>🧑‍🏫 Coach Focus</span>
+                    </span>
+                    <span className={sideHeaderCaretClass(sideCollapsed.coach)}>
+                      ▾
+                    </span>
+                  </button>
 
-                  <div className="mt-5">
-                    <button
-                      onClick={applyCoachChanges}
-                      disabled={!hasPendingCoachChanges}
-                      className={`w-full px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all border ${
-                        hasPendingCoachChanges
-                          ? "bg-mcgill-red text-white border-mcgill-red hover:bg-red-600"
-                          : "bg-white/5 text-white/30 border-white/10 cursor-not-allowed"
-                      }`}
-                    >
-                      Apply Coach Settings
-                    </button>
-                  </div>
+                  {!sideCollapsed.coach && (
+                    <>
+                      <div className="space-y-2">
+                        <button
+                          onClick={() =>
+                            setPendingCoachSettings((prev) => ({
+                              ...prev,
+                              focusBodyLanguage: !prev.focusBodyLanguage,
+                            }))
+                          }
+                          className={`w-full px-3 py-2 rounded-lg text-xs font-bold transition-all text-left border ${
+                            pendingCoachSettings.focusBodyLanguage
+                              ? "bg-mcgill-red text-white border-mcgill-red"
+                              : "bg-white/5 text-white/70 border-white/10 hover:border-white/30"
+                          }`}
+                        >
+                          Body language
+                        </button>
+
+                        <button
+                          onClick={() =>
+                            setPendingCoachSettings((prev) => ({
+                              ...prev,
+                              focusOutfit: !prev.focusOutfit,
+                            }))
+                          }
+                          className={`w-full px-3 py-2 rounded-lg text-xs font-bold transition-all text-left border ${
+                            pendingCoachSettings.focusOutfit
+                              ? "bg-mcgill-red text-white border-mcgill-red"
+                              : "bg-white/5 text-white/70 border-white/10 hover:border-white/30"
+                          }`}
+                        >
+                          Outfit & presentation
+                        </button>
+
+                        <button
+                          onClick={() =>
+                            setPendingCoachSettings((prev) => ({
+                              ...prev,
+                              focusFacialExpressions: !prev.focusFacialExpressions,
+                            }))
+                          }
+                          className={`w-full px-3 py-2 rounded-lg text-xs font-bold transition-all text-left border ${
+                            pendingCoachSettings.focusFacialExpressions
+                              ? "bg-mcgill-red text-white border-mcgill-red"
+                              : "bg-white/5 text-white/70 border-white/10 hover:border-white/30"
+                          }`}
+                        >
+                          Facial expressions
+                        </button>
+                      </div>
+
+                      <div className="mt-4">
+                        <div className="flex justify-between items-center mb-2">
+                          <label className="text-[9px] text-white/70 font-bold">Coach Strictness</label>
+                          <span className="text-[9px] font-bold text-mcgill-red">{pendingCoachSettings.strictness}%</span>
+                        </div>
+                        <input
+                          type="range"
+                          min="0"
+                          max="100"
+                          value={pendingCoachSettings.strictness}
+                          onChange={(e) =>
+                            setPendingCoachSettings((prev) => ({
+                              ...prev,
+                              strictness: parseInt(e.target.value),
+                            }))
+                          }
+                          className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-mcgill-red"
+                        />
+                        <div className="flex justify-between text-[8px] text-white/40 mt-1">
+                          <span>Gentle</span>
+                          <span>Direct</span>
+                        </div>
+                      </div>
+
+                      <div className="mt-5">
+                        <button
+                          onClick={applyCoachChanges}
+                          disabled={!hasPendingCoachChanges}
+                          className={`w-full px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all border ${
+                            hasPendingCoachChanges
+                              ? "bg-mcgill-red text-white border-mcgill-red hover:bg-red-600"
+                              : "bg-white/5 text-white/30 border-white/10 cursor-not-allowed"
+                          }`}
+                        >
+                          Apply Coach Settings
+                        </button>
+                      </div>
+
+                      {/* Live requests */}
+                      <div className="mt-5">
+                        <label className="block text-[9px] text-white/70 font-bold mb-2">Live request</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={coachLiveRequest}
+                            onChange={(e) => setCoachLiveRequest(e.target.value)}
+                            onKeyDown={(e) => e.key === "Enter" && sendCoachLiveRequest()}
+                            placeholder="E.g., be more strict; focus on eye contact"
+                            className="flex-1 px-3 py-2 bg-white/10 border border-white/20 rounded-lg text-xs text-white placeholder-white/30 focus:outline-none focus:border-mcgill-red"
+                          />
+                          <button
+                            onClick={sendCoachLiveRequest}
+                            disabled={!isSessionActive || !coachLiveRequest.trim()}
+                            className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase tracking-widest border transition-all ${
+                              isSessionActive && coachLiveRequest.trim()
+                                ? "bg-white text-slate-900 border-white hover:bg-white/90"
+                                : "bg-white/5 text-white/30 border-white/10 cursor-not-allowed"
+                            }`}
+                          >
+                            Send
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               )}
 
@@ -1319,53 +1913,80 @@ Do NOT roleplay as a recruiter/friend/stranger; you are strictly a coach.`;
                 <>
                   {/* AI Role Selection */}
                   <div className="mb-8">
-                    <span className="text-[10px] font-black text-mcgill-red uppercase tracking-[0.3em] mb-3 block">
-                      🎭 AI Role
-                    </span>
-                    <div className="space-y-2">
-                      {roleOptions.map((role) => (
-                        <button
-                          key={role}
-                          onClick={() => {
-                            setPendingRole(role);
-                            setPendingCustomRole("");
-                            setShowCustomRoleInput(false);
-                          }}
-                          className={`w-full px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
-                            pendingRole === role && !pendingCustomRole.trim()
-                              ? "bg-mcgill-red text-white"
-                              : "bg-white/5 border border-white/10 text-white/70 hover:border-white/30"
-                          }`}
-                        >
-                          {role}
-                        </button>
-                      ))}
-                      <button
-                        onClick={() => setShowCustomRoleInput(!showCustomRoleInput)}
-                        className="w-full px-3 py-2 rounded-lg text-xs font-bold transition-all text-left bg-white/5 border border-dashed border-white/30 text-white/70 hover:border-white/50"
-                      >
-                        ✨ Custom Role
-                      </button>
-                    </div>
-                    {showCustomRoleInput && (
-                      <div className="mt-3 p-3 bg-white/5 rounded-lg animate-in fade-in">
-                        <input
-                          type="text"
-                          placeholder="Define your own role..."
-                          value={pendingCustomRole}
-                          onChange={(e) => setPendingCustomRole(e.target.value)}
-                          className="w-full px-2 py-2 bg-white/10 border border-white/20 rounded text-xs text-white placeholder-white/30 focus:outline-none focus:border-mcgill-red"
-                        />
-                      </div>
+                    <button
+                      type="button"
+                      onClick={() => toggleSide("role")}
+                      aria-expanded={!sideCollapsed.role}
+                      className={`${sideHeaderClass} text-white/85 text-xs font-black uppercase tracking-[0.25em] mb-3`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-mcgill-red" />
+                        <span>🎭 AI Role</span>
+                      </span>
+                      <span className={sideHeaderCaretClass(sideCollapsed.role)}>
+                        ▾
+                      </span>
+                    </button>
+                    {!sideCollapsed.role && (
+                      <>
+                        <div className="space-y-2">
+                          {roleOptions.map((role) => (
+                            <button
+                              key={role}
+                              onClick={() => {
+                                setPendingRole(role);
+                                setPendingCustomRole("");
+                                setShowCustomRoleInput(false);
+                              }}
+                              className={`w-full px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
+                                pendingRole === role && !pendingCustomRole.trim()
+                                  ? "bg-mcgill-red text-white"
+                                  : "bg-white/5 border border-white/10 text-white/70 hover:border-white/30"
+                              }`}
+                            >
+                              {role}
+                            </button>
+                          ))}
+                          <button
+                            onClick={() => setShowCustomRoleInput(!showCustomRoleInput)}
+                            className="w-full px-3 py-2 rounded-lg text-xs font-bold transition-all text-left bg-white/5 border border-dashed border-white/30 text-white/70 hover:border-white/50"
+                          >
+                            ✨ Custom Role
+                          </button>
+                        </div>
+                        {showCustomRoleInput && (
+                          <div className="mt-3 p-3 bg-white/5 rounded-lg animate-in fade-in">
+                            <input
+                              type="text"
+                              placeholder="Define your own role..."
+                              value={pendingCustomRole}
+                              onChange={(e) => setPendingCustomRole(e.target.value)}
+                              className="w-full px-2 py-2 bg-white/10 border border-white/20 rounded text-xs text-white placeholder-white/30 focus:outline-none focus:border-mcgill-red"
+                            />
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
 
                   {/* Personality Sliders */}
                   <div className="mb-8">
-                    <span className="text-[10px] font-black text-mcgill-red uppercase tracking-[0.3em] mb-3 block">
-                      ⚙️ Personality Tuning
-                    </span>
-                    <div className="space-y-4">
+                    <button
+                      type="button"
+                      onClick={() => toggleSide("personality")}
+                      aria-expanded={!sideCollapsed.personality}
+                      className={`${sideHeaderClass} text-white/85 text-xs font-black uppercase tracking-[0.25em] mb-3`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-mcgill-red" />
+                        <span>⚙️ Personality Tuning</span>
+                      </span>
+                      <span className={sideHeaderCaretClass(sideCollapsed.personality)}>
+                        ▾
+                      </span>
+                    </button>
+                    {!sideCollapsed.personality && (
+                      <div className="space-y-4">
                   {/* Pressure Slider */}
                   <div>
                     <div className="flex justify-between items-center mb-2">
@@ -1440,31 +2061,227 @@ Do NOT roleplay as a recruiter/friend/stranger; you are strictly a coach.`;
                       <span>Formal</span>
                     </div>
                   </div>
-                    </div>
+                      </div>
+                    )}
                   </div>
 
                   {/* Apply Changes */}
                   <div className="mb-8">
                     <button
-                      onClick={applyChanges}
-                      disabled={!hasPendingChanges}
-                      className={`w-full px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all border ${
-                        hasPendingChanges
-                          ? "bg-mcgill-red text-white border-mcgill-red hover:bg-red-600"
-                          : "bg-white/5 text-white/30 border-white/10 cursor-not-allowed"
-                      }`}
+                      type="button"
+                      onClick={() => toggleSide("apply")}
+                      aria-expanded={!sideCollapsed.apply}
+                      className={`${sideHeaderClass} text-white/85 text-xs font-black uppercase tracking-[0.25em] mb-3`}
                     >
-                      Apply Changes
+                      <span className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-mcgill-red" />
+                        <span>✅ Apply</span>
+                      </span>
+                      <span className={sideHeaderCaretClass(sideCollapsed.apply)}>
+                        ▾
+                      </span>
                     </button>
+                    {!sideCollapsed.apply && (
+                      <button
+                        onClick={applyChanges}
+                        disabled={!hasPendingChanges}
+                        className={`w-full px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all border ${
+                          hasPendingChanges
+                            ? "bg-mcgill-red text-white border-mcgill-red hover:bg-red-600"
+                            : "bg-white/5 text-white/30 border-white/10 cursor-not-allowed"
+                        }`}
+                      >
+                        Apply Changes
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Get Feedback (Roleplay) */}
+                  <div className="mb-8">
+                    <button
+                      type="button"
+                      onClick={() => toggleSide("feedback")}
+                      aria-expanded={!sideCollapsed.feedback}
+                      className={`${sideHeaderClass} text-white/85 text-xs font-black uppercase tracking-[0.25em] mb-3`}
+                    >
+                      <span className="flex items-center gap-2">
+                        <span className="w-1.5 h-1.5 rounded-full bg-mcgill-red" />
+                        <span>📋 Get Feedback</span>
+                      </span>
+                      <span className={sideHeaderCaretClass(sideCollapsed.feedback)}>▾</span>
+                    </button>
+
+                    {!sideCollapsed.feedback && (
+                      <div>
+                        <button
+                          onClick={handleGetRoleplayFeedback}
+                          disabled={!isSessionActive || isRoleplayFeedbackLoading}
+                          className={`w-full px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all border mb-3 ${
+                            isSessionActive && !isRoleplayFeedbackLoading
+                              ? "bg-white text-slate-900 border-white hover:bg-white/90"
+                              : "bg-white/5 text-white/30 border-white/10 cursor-not-allowed"
+                          }`}
+                        >
+                          {isRoleplayFeedbackLoading ? "Analyzing..." : "Get Feedback"}
+                        </button>
+
+                        {!((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) && (
+                          <p className="text-[10px] text-white/40 mb-3">
+                            Transcript capture isn’t supported in this browser; feedback will use snapshots + audio-level signals.
+                          </p>
+                        )}
+
+                        {roleplayFeedback && (
+                          <div className="space-y-3">
+                            <div className="bg-white/5 border border-white/10 p-3 rounded-xl">
+                              <div className="flex items-center justify-between">
+                                <p className="text-xs text-white font-black tracking-wide">Overall</p>
+                                <p className="text-xs text-mcgill-red font-black">
+                                  {Math.round(roleplayFeedback.overallScore)}/100
+                                </p>
+                              </div>
+                              <p className="mt-2 text-xs text-white/75 leading-relaxed">
+                                {roleplayFeedback.oneLineSummary}
+                              </p>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2">
+                              {(
+                                [
+                                  ["Content", roleplayFeedback.categoryScores.content],
+                                  ["Fit", roleplayFeedback.categoryScores.appropriateness],
+                                  ["Delivery", roleplayFeedback.categoryScores.delivery],
+                                  ["Confidence", roleplayFeedback.categoryScores.confidence],
+                                  ["Body", roleplayFeedback.categoryScores.bodyLanguage],
+                                  ["Outfit", roleplayFeedback.categoryScores.outfitPresence],
+                                ] as Array<[string, number]>
+                              ).map(([label, score]) => (
+                                <div key={label} className="bg-white/5 border border-white/10 p-3 rounded-xl">
+                                  <div className="flex items-center justify-between">
+                                    <p className="text-[10px] text-white/60 font-black uppercase tracking-widest">
+                                      {label}
+                                    </p>
+                                    <p className="text-[10px] text-white font-black">{Math.round(score)}/100</p>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+
+                            {roleplayFeedback.strengths?.length > 0 && (
+                              <div className="bg-emerald-500/10 border border-emerald-500/30 p-3 rounded-xl">
+                                <p className="text-[10px] text-emerald-200 font-black uppercase tracking-widest mb-2">Strengths</p>
+                                <ul className="space-y-1">
+                                  {roleplayFeedback.strengths.slice(0, 6).map((s, i) => (
+                                    <li key={i} className="text-xs text-white/80">• {s}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {roleplayFeedback.issuesNoted?.length > 0 && (
+                              <div className="bg-white/5 border border-white/10 p-3 rounded-xl">
+                                <p className="text-[10px] text-white/60 font-black uppercase tracking-widest mb-2">Issues Noted</p>
+                                <ul className="space-y-1">
+                                  {roleplayFeedback.issuesNoted.slice(0, 8).map((s, i) => (
+                                    <li key={i} className="text-xs text-white/80">• {s}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {roleplayFeedback.contextFitNotes?.length > 0 && (
+                              <div className="bg-white/5 border border-white/10 p-3 rounded-xl">
+                                <p className="text-[10px] text-white/60 font-black uppercase tracking-widest mb-2">Context Fit</p>
+                                <ul className="space-y-1">
+                                  {roleplayFeedback.contextFitNotes.slice(0, 8).map((s, i) => (
+                                    <li key={i} className="text-xs text-white/80">• {s}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {roleplayFeedback.answerQualityNotes?.length > 0 && (
+                              <div className="bg-white/5 border border-white/10 p-3 rounded-xl">
+                                <p className="text-[10px] text-white/60 font-black uppercase tracking-widest mb-2">Answer Quality</p>
+                                <ul className="space-y-1">
+                                  {roleplayFeedback.answerQualityNotes.slice(0, 8).map((s, i) => (
+                                    <li key={i} className="text-xs text-white/80">• {s}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {roleplayFeedback.bodyLanguageNotes?.length > 0 && (
+                              <div className="bg-white/5 border border-white/10 p-3 rounded-xl">
+                                <p className="text-[10px] text-white/60 font-black uppercase tracking-widest mb-2">Body Language</p>
+                                <ul className="space-y-1">
+                                  {roleplayFeedback.bodyLanguageNotes.slice(0, 8).map((s, i) => (
+                                    <li key={i} className="text-xs text-white/80">• {s}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {roleplayFeedback.voiceDeliveryNotes?.length > 0 && (
+                              <div className="bg-white/5 border border-white/10 p-3 rounded-xl">
+                                <p className="text-[10px] text-white/60 font-black uppercase tracking-widest mb-2">Voice & Delivery</p>
+                                <ul className="space-y-1">
+                                  {roleplayFeedback.voiceDeliveryNotes.slice(0, 8).map((s, i) => (
+                                    <li key={i} className="text-xs text-white/80">• {s}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {roleplayFeedback.concreteFixes?.length > 0 && (
+                              <div className="bg-white/5 border border-white/10 p-3 rounded-xl">
+                                <p className="text-[10px] text-white/60 font-black uppercase tracking-widest mb-2">Concrete Fixes</p>
+                                <ul className="space-y-1">
+                                  {roleplayFeedback.concreteFixes.slice(0, 8).map((s, i) => (
+                                    <li key={i} className="text-xs text-white/80">• {s}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+
+                            {roleplayFeedback.nextPracticeDrills?.length > 0 && (
+                              <div className="bg-white/5 border border-white/10 p-3 rounded-xl">
+                                <p className="text-[10px] text-white/60 font-black uppercase tracking-widest mb-2">Next Drills</p>
+                                <ul className="space-y-1">
+                                  {roleplayFeedback.nextPracticeDrills.slice(0, 6).map((s, i) => (
+                                    <li key={i} className="text-xs text-white/80">• {s}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
                   {/* Current Role Display */}
                   {(pendingRole || pendingCustomRole) && (
                     <div className="pt-6 border-t border-white/10">
-                      <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-xl">
-                        <p className="text-[10px] text-emerald-300 font-black mb-1">Pending Persona</p>
-                        <p className="text-sm text-white font-bold break-words">{pendingPersonaText}</p>
-                      </div>
+                      <button
+                        type="button"
+                        onClick={() => toggleSide("pending")}
+                        aria-expanded={!sideCollapsed.pending}
+                        className={`${sideHeaderClass} text-white/85 text-xs font-black uppercase tracking-[0.25em] mb-3`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          <span>Pending Persona</span>
+                        </span>
+                        <span className={sideHeaderCaretClass(sideCollapsed.pending)}>
+                          ▾
+                        </span>
+                      </button>
+                      {!sideCollapsed.pending && (
+                        <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-xl">
+                          <p className="text-sm text-white font-bold break-words">{pendingPersonaText}</p>
+                        </div>
+                      )}
                     </div>
                   )}
                 </>
@@ -1473,10 +2290,25 @@ Do NOT roleplay as a recruiter/friend/stranger; you are strictly a coach.`;
               {/* Sticky Current Persona at Bottom */}
               {practiceMode === "roleplay" && (selectedRole || customRole) && (
                 <div className="pt-6 border-t border-white/10 mt-auto">
-                  <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-xl">
-                    <p className="text-[10px] text-emerald-300 font-black mb-1">Active Persona</p>
-                    <p className="text-sm text-white font-bold break-words">{activePersonaText}</p>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => toggleSide("active")}
+                    aria-expanded={!sideCollapsed.active}
+                    className={`${sideHeaderClass} text-white/85 text-xs font-black uppercase tracking-[0.25em] mb-3`}
+                  >
+                    <span className="flex items-center gap-2">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                      <span>Active Persona</span>
+                    </span>
+                    <span className={sideHeaderCaretClass(sideCollapsed.active)}>
+                      ▾
+                    </span>
+                  </button>
+                  {!sideCollapsed.active && (
+                    <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-xl">
+                      <p className="text-sm text-white font-bold break-words">{activePersonaText}</p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
