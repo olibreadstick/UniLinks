@@ -11,6 +11,15 @@ type Scenario = {
   isCustom?: boolean;
 };
 
+type PracticeMode = "coach" | "roleplay";
+
+type CoachSettings = {
+  focusBodyLanguage: boolean;
+  focusOutfit: boolean;
+  focusFacialExpressions: boolean;
+  strictness: number; // 0-100
+};
+
 const JOINED_COURSES_STORAGE_KEY = "mcg_joined_courses";
 
 const DEFAULT_SCENARIOS: Scenario[] = [
@@ -175,6 +184,8 @@ const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
     });
   }, [joinedCourses]);
   const [step, setStep] = useState<"prep" | "active">("prep");
+  const [practiceMode, setPracticeMode] = useState<PracticeMode>("coach");
+  const practiceModeRef = useRef<PracticeMode>("coach");
   const [selectedScenario, setSelectedScenario] = useState<Scenario>(() => {
     return likedItemScenarios[0] ?? courseSuggestionScenarios[0] ?? DEFAULT_SCENARIOS[0]!;
   });
@@ -184,6 +195,26 @@ const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
   const [isQuotaFull, setIsQuotaFull] = useState(false);
   const [customScenario, setCustomScenario] = useState("");
   const [showCustomInput, setShowCustomInput] = useState(false);
+
+  const [coachSettings, setCoachSettings] = useState<CoachSettings>({
+    focusBodyLanguage: true,
+    focusOutfit: true,
+    focusFacialExpressions: true,
+    strictness: 55,
+  });
+
+  const [pendingCoachSettings, setPendingCoachSettings] = useState<CoachSettings>({
+    focusBodyLanguage: true,
+    focusOutfit: true,
+    focusFacialExpressions: true,
+    strictness: 55,
+  });
+
+  const hasPendingCoachChanges =
+    pendingCoachSettings.focusBodyLanguage !== coachSettings.focusBodyLanguage ||
+    pendingCoachSettings.focusOutfit !== coachSettings.focusOutfit ||
+    pendingCoachSettings.focusFacialExpressions !== coachSettings.focusFacialExpressions ||
+    pendingCoachSettings.strictness !== coachSettings.strictness;
 
   useEffect(() => {
     if (selectedScenario.isCustom) return;
@@ -223,7 +254,22 @@ const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
   const sidePanelScrollRef = useRef<HTMLDivElement | null>(null);
   const nextStartTimeRef = useRef<number>(0);
   const sourcesRef = useRef<Set<AudioBufferSourceNode>>(new Set());
+  const isSpeakingRef = useRef<boolean>(false);
+  const ignoreAudioUntilRef = useRef<number>(0);
   const roleStateRef = useRef({ selectedRole, customRole, pressure: personalitySettings.pressure, niceness: personalitySettings.niceness, formality: personalitySettings.formality });
+
+  const setSpeakingState = (value: boolean) => {
+    isSpeakingRef.current = value;
+    setIsSpeaking(value);
+  };
+
+  useEffect(() => {
+    practiceModeRef.current = practiceMode;
+  }, [practiceMode]);
+
+  useEffect(() => {
+    isSpeakingRef.current = isSpeaking;
+  }, [isSpeaking]);
 
   const pendingPersonaText = pendingCustomRole.trim() || pendingRole;
   const activePersonaText = customRole.trim() || selectedRole;
@@ -269,7 +315,7 @@ const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
       setStatus("Updating AI personality...");
       stopSession();
       setTimeout(() => {
-        startSession();
+        startSession("roleplay");
       }, 600);
     }
   };
@@ -303,9 +349,8 @@ const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
     }
   };
 
-  // Build system instruction based on role, scenario, and personality settings
-  const buildSystemInstruction = (): string => {
-    const roleText = customRole.trim() || selectedRole;
+  const buildRoleplayInstruction = (): string => {
+    const roleText = customRole.trim() || selectedRole || "Conversation Partner";
     const pressureDesc =
       personalitySettings.pressure < 30
         ? "very relaxed and encouraging"
@@ -325,10 +370,61 @@ const AICoach: React.FC<AICoachProps> = ({ heartedItems = [] }) => {
         ? "professional yet friendly"
         : "formal and structured";
 
-    return `You are roleplaying as: "${roleText}" for a McGill student practicing for "${selectedScenario.title}". 
-Your interaction style should be ${pressureDesc}, ${nicenessDesc}, and ${formalityDesc}. 
-Monitor their body language via video and provide real-time feedback on communication cues, confidence, and engagement. 
-Be encouraging but authentic to your assigned role. Reference McGill campus context when relevant.`;
+    return `You are roleplaying as: "${roleText}" for a McGill student practicing for "${selectedScenario.title}".
+Your interaction style should be ${pressureDesc}, ${nicenessDesc}, and ${formalityDesc}.
+Stay in character and focus on realistic roleplay dialogue.
+Do NOT provide coaching (outfit/body language/facial expression feedback) unless the user explicitly asks for coaching.
+Reference McGill campus context when relevant.`;
+  };
+
+  const buildCoachInstruction = (): string => {
+    const focusBits: string[] = [];
+    if (coachSettings.focusBodyLanguage) focusBits.push("body language (posture, gestures, eye contact, confidence signals)");
+    if (coachSettings.focusOutfit) focusBits.push("outfit/presentation (fit, appropriateness for the event, neatness)");
+    if (coachSettings.focusFacialExpressions) focusBits.push("facial expressions (smile, warmth, engagement)");
+    const focusText = focusBits.length ? focusBits.join(", ") : "general communication cues";
+
+    const strictnessDesc =
+      coachSettings.strictness < 30
+        ? "very gentle and reassuring"
+        : coachSettings.strictness < 70
+        ? "direct but encouraging"
+        : "highly critical, precise, and improvement-focused";
+
+    return `You are an AI Coach for a McGill student practicing for "${selectedScenario.title}".
+Your job is to give real-time coaching and actionable feedback based on their camera presence and communication.
+Focus on: ${focusText}.
+Your coaching tone should be ${strictnessDesc}.
+Give short, specific feedback (1-3 bullets worth) and one concrete next action at a time.
+Do NOT roleplay as a recruiter/friend/stranger; you are strictly a coach.`;
+  };
+
+  const buildSystemInstructionForMode = (mode: PracticeMode): string => {
+    return mode === "coach" ? buildCoachInstruction() : buildRoleplayInstruction();
+  };
+
+  const setModeAndRestart = (nextMode: PracticeMode) => {
+    if (nextMode === practiceMode) return;
+    setPracticeMode(nextMode);
+
+    if (isSessionActive) {
+      setStatus(nextMode === "coach" ? "Switching to Coach Mode..." : "Switching to Roleplay Mode...");
+      stopSession();
+      setTimeout(() => {
+        startSession(nextMode);
+      }, 600);
+    }
+  };
+
+  const applyCoachChanges = () => {
+    setCoachSettings(pendingCoachSettings);
+    if (isSessionActive && practiceMode === "coach") {
+      setStatus("Updating coach settings...");
+      stopSession();
+      setTimeout(() => {
+        startSession("coach");
+      }, 600);
+    }
   };
 
   // Select voice based on role and personality
@@ -432,12 +528,14 @@ Be encouraging but authentic to your assigned role. Reference McGill campus cont
     return buffer;
   };
 
-  const startSession = async () => {
+  const startSession = async (forcedMode?: PracticeMode) => {
     try {
       setIsQuotaFull(false);
       setStep("active");
       setStatus("Initializing AI...");
       setIsLoading(true);
+
+      const modeToUse = forcedMode ?? practiceModeRef.current;
 
       // Reset any playback scheduling from prior sessions
       nextStartTimeRef.current = 0;
@@ -492,31 +590,54 @@ Be encouraging but authentic to your assigned role. Reference McGill campus cont
             const source = inputCtx.createMediaStreamSource(stream);
             const scriptProcessor = inputCtx.createScriptProcessor(4096, 1, 1);
             let lastInterruptTime = 0;
-            const INTERRUPT_COOLDOWN = 1000; // ms between interrupts
-            const SPEECH_THRESHOLD = 0.12; // RMS threshold for detecting loud user speech
+            const INTERRUPT_COOLDOWN = 300; // ms between interrupts
+            const MIN_RMS_THRESHOLD = 0.018;
+            const MIN_PEAK_THRESHOLD = 0.12;
             let speechFrames = 0;
+            let noiseRms = 0.008;
+            let noisePeak = 0.03;
             
             scriptProcessor.onaudioprocess = (e) => {
               const inputData = e.inputBuffer.getChannelData(0);
               
               // Detect user speech by calculating audio amplitude (RMS)
               let sum = 0;
+              let peakAbs = 0;
               for (let i = 0; i < inputData.length; i++) {
-                sum += inputData[i] * inputData[i];
+                const sample = inputData[i] ?? 0;
+                sum += sample * sample;
+                const abs = Math.abs(sample);
+                if (abs > peakAbs) peakAbs = abs;
               }
               const rms = Math.sqrt(sum / inputData.length);
               
               // Only interrupt when AI is actively speaking, and only after a few consecutive frames
-              if (rms > SPEECH_THRESHOLD && isSpeaking) {
+              const aiIsSpeakingNow = isSpeakingRef.current || sourcesRef.current.size > 0;
+              if (!aiIsSpeakingNow) {
+                // Update noise floor when AI isn't speaking (EMA)
+                noiseRms = noiseRms * 0.95 + rms * 0.05;
+                noisePeak = noisePeak * 0.95 + peakAbs * 0.05;
+              }
+
+              const dynamicRmsThreshold = Math.max(MIN_RMS_THRESHOLD, noiseRms * 4);
+              const dynamicPeakThreshold = Math.max(MIN_PEAK_THRESHOLD, noisePeak * 3);
+              const userIsSpeaking = rms > dynamicRmsThreshold || peakAbs > dynamicPeakThreshold;
+
+              if (userIsSpeaking && aiIsSpeakingNow) {
                 speechFrames += 1;
               } else {
                 speechFrames = 0;
               }
 
-              if (speechFrames >= 3) {
+              if (speechFrames >= 2) {
                 const now = Date.now();
                 if (now - lastInterruptTime > INTERRUPT_COOLDOWN) {
                   lastInterruptTime = now;
+
+                  // Briefly ignore incoming audio chunks after interrupt so the AI doesn't
+                  // "keep talking" due to already-in-flight server audio.
+                  ignoreAudioUntilRef.current = now + 4000;
+
                   // Stop all currently playing audio sources
                   sourcesRef.current.forEach((src) => {
                     try {
@@ -526,7 +647,8 @@ Be encouraging but authentic to your assigned role. Reference McGill campus cont
                     }
                   });
                   sourcesRef.current.clear();
-                  setIsSpeaking(false);
+                  nextStartTimeRef.current = outputCtx.currentTime;
+                  setSpeakingState(false);
                 }
               }
               
@@ -583,6 +705,8 @@ Be encouraging but authentic to your assigned role. Reference McGill campus cont
             (window as any)._coachTimer = frameTimer;
           },
           onmessage: async (message: LiveServerMessage) => {
+            if (Date.now() < ignoreAudioUntilRef.current) return;
+
             const parts = message.serverContent?.modelTurn?.parts || [];
             const audioParts = parts.filter((p: any) =>
               p?.inlineData?.data &&
@@ -595,6 +719,7 @@ Be encouraging but authentic to your assigned role. Reference McGill campus cont
             const base64Audio = base64FromParts || fallbackData;
 
             if (base64Audio) {
+              if (Date.now() < ignoreAudioUntilRef.current) return;
               nextStartTimeRef.current = Math.max(nextStartTimeRef.current, outputCtx.currentTime);
               const audioBuffer = await decodeAudioData(
                 decode(base64Audio),
@@ -602,6 +727,8 @@ Be encouraging but authentic to your assigned role. Reference McGill campus cont
                 24000,
                 1,
               );
+
+              if (Date.now() < ignoreAudioUntilRef.current) return;
               const source = outputCtx.createBufferSource();
               source.buffer = audioBuffer;
               source.connect(outputCtx.destination);
@@ -610,10 +737,10 @@ Be encouraging but authentic to your assigned role. Reference McGill campus cont
               sourcesRef.current.add(source);
               
               // Set speaking state
-              setIsSpeaking(true);
+              setSpeakingState(true);
               source.onended = () => {
                 sourcesRef.current.delete(source);
-                if (sourcesRef.current.size === 0) setIsSpeaking(false);
+                if (sourcesRef.current.size === 0) setSpeakingState(false);
               };
             }
           },
@@ -629,7 +756,7 @@ Be encouraging but authentic to your assigned role. Reference McGill campus cont
         },
         config: {
           responseModalities: [Modality.AUDIO],
-          systemInstruction: buildSystemInstruction(),
+          systemInstruction: buildSystemInstructionForMode(modeToUse),
           speechConfig: {
             voiceConfig: { prebuiltVoiceConfig: { voiceName: "Leda" } },
           },
@@ -652,10 +779,13 @@ Be encouraging but authentic to your assigned role. Reference McGill campus cont
 
   const stopSession = () => {
     setIsSessionActive(false);
-    setIsSpeaking(false);
+    setSpeakingState(false);
     setIsQuotaFull(false);
     setIsLoading(false);
     setStep("prep");
+
+    ignoreAudioUntilRef.current = 0;
+    isSpeakingRef.current = false;
 
     nextStartTimeRef.current = 0;
     sourcesRef.current.forEach((src) => {
@@ -909,7 +1039,10 @@ Be encouraging but authentic to your assigned role. Reference McGill campus cont
               You'll customize your AI coach and practice tips once you start.
             </p>
             <button
-              onClick={startSession}
+              onClick={() => {
+                setPracticeMode("coach");
+                startSession("coach");
+              }}
               className="w-full py-6 bg-white text-mcgill-red font-black text-xl rounded-3xl shadow-xl transition-all hover:scale-105 active:scale-95"
             >
               Start Practice
@@ -993,11 +1126,32 @@ Be encouraging but authentic to your assigned role. Reference McGill campus cont
                   <div className="absolute inset-0 border-2 border-mcgill-red rounded-lg animate-pulse" />
                 </div>
               )}
-              <div className="absolute top-6 left-6 px-4 py-2 bg-black/40 backdrop-blur-md rounded-full border border-white/20 text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-2">
-                <span className="flex items-center gap-1.5">
-                  <span className={`w-2 h-2 rounded-full ${isSpeaking ? 'bg-red-500 animate-pulse' : 'bg-slate-400'}`} />
-                  <span>{isSpeaking ? 'Speaking' : 'Listening'}</span>
-                </span>
+              <div className="absolute top-6 left-6 px-4 py-2 bg-black/40 backdrop-blur-md rounded-full border border-white/20 text-[10px] font-black uppercase tracking-[0.2em] flex items-center gap-3">
+                <span className={`w-2 h-2 rounded-full ${isSpeaking ? 'bg-red-500 animate-pulse' : 'bg-slate-400'}`} />
+
+                {/* Amplitude Visualizer */}
+                <div className="flex items-end gap-0.5 h-4" aria-hidden="true">
+                  {[0, 1, 2, 3, 4].map((i) => (
+                    <div
+                      key={i}
+                      className={
+                        `w-0.5 rounded-full ` +
+                        (isSpeaking
+                          ? "bg-mcgill-red animate-bounce"
+                          : "bg-slate-400")
+                      }
+                      style={{
+                        height: isSpeaking
+                          ? [6, 14, 10, 16, 8][i]
+                          : [4, 6, 5, 6, 4][i],
+                        animationDelay: `${i * 0.08}s`,
+                        animationDuration: isSpeaking ? "0.6s" : undefined,
+                      }}
+                    />
+                  ))}
+                </div>
+
+                <span>{isSpeaking ? 'Speaking' : 'Listening'}</span>
               </div>
             </div>
             <div className="flex-1 bg-slate-800/50 p-8 flex flex-col overflow-hidden relative min-h-0">
@@ -1012,10 +1166,39 @@ Be encouraging but authentic to your assigned role. Reference McGill campus cont
                 className="flex-1 min-h-0 overflow-y-auto pr-4"
                 style={{ scrollbarGutter: "stable" }}
               >
+              {/* Mode Switch */}
+              <div className="mb-8">
+                <span className="text-[10px] font-black text-mcgill-red uppercase tracking-[0.3em] mb-3 block">
+                  🧭 Practice Mode
+                </span>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={() => setModeAndRestart("coach")}
+                    className={`px-3 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all border ${
+                      practiceMode === "coach"
+                        ? "bg-mcgill-red text-white border-mcgill-red"
+                        : "bg-white/5 text-white/70 border-white/10 hover:border-white/30"
+                    }`}
+                  >
+                    Coach
+                  </button>
+                  <button
+                    onClick={() => setModeAndRestart("roleplay")}
+                    className={`px-3 py-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all border ${
+                      practiceMode === "roleplay"
+                        ? "bg-mcgill-red text-white border-mcgill-red"
+                        : "bg-white/5 text-white/70 border-white/10 hover:border-white/30"
+                    }`}
+                  >
+                    Roleplay
+                  </button>
+                </div>
+              </div>
+
               {/* Icebreakers Section */}
               <div className="mb-8">
                 <span className="text-[10px] font-black text-mcgill-red uppercase tracking-[0.3em] mb-3 block">
-                  💬 Opening Lines
+                  💬 Try These Lines
                 </span>
                 <div className="space-y-2">
                   {icebreakers.length > 0 ? (
@@ -1030,55 +1213,153 @@ Be encouraging but authentic to your assigned role. Reference McGill campus cont
                 </div>
               </div>
 
-              {/* AI Role Selection */}
-              <div className="mb-8">
-                <span className="text-[10px] font-black text-mcgill-red uppercase tracking-[0.3em] mb-3 block">
-                  🎭 AI Role
-                </span>
-                <div className="space-y-2">
-                  {roleOptions.map((role) => (
+              {practiceMode === "coach" && (
+                <div className="mb-8">
+                  <span className="text-[10px] font-black text-mcgill-red uppercase tracking-[0.3em] mb-3 block">
+                    🧑‍🏫 Coach Focus
+                  </span>
+
+                  <div className="space-y-2">
                     <button
-                      key={role}
-                      onClick={() => {
-                        setPendingRole(role);
-                        setPendingCustomRole("");
-                        setShowCustomRoleInput(false);
-                      }}
-                      className={`w-full px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
-                        pendingRole === role && !pendingCustomRole.trim()
-                          ? "bg-mcgill-red text-white"
-                          : "bg-white/5 border border-white/10 text-white/70 hover:border-white/30"
+                      onClick={() =>
+                        setPendingCoachSettings((prev) => ({
+                          ...prev,
+                          focusBodyLanguage: !prev.focusBodyLanguage,
+                        }))
+                      }
+                      className={`w-full px-3 py-2 rounded-lg text-xs font-bold transition-all text-left border ${
+                        pendingCoachSettings.focusBodyLanguage
+                          ? "bg-mcgill-red text-white border-mcgill-red"
+                          : "bg-white/5 text-white/70 border-white/10 hover:border-white/30"
                       }`}
                     >
-                      {role}
+                      Body language
                     </button>
-                  ))}
-                  <button
-                    onClick={() => setShowCustomRoleInput(!showCustomRoleInput)}
-                    className="w-full px-3 py-2 rounded-lg text-xs font-bold transition-all text-left bg-white/5 border border-dashed border-white/30 text-white/70 hover:border-white/50"
-                  >
-                    ✨ Custom Role
-                  </button>
-                </div>
-                {showCustomRoleInput && (
-                  <div className="mt-3 p-3 bg-white/5 rounded-lg animate-in fade-in">
-                    <input
-                      type="text"
-                      placeholder="Define your own role..."
-                      value={pendingCustomRole}
-                      onChange={(e) => setPendingCustomRole(e.target.value)}
-                      className="w-full px-2 py-2 bg-white/10 border border-white/20 rounded text-xs text-white placeholder-white/30 focus:outline-none focus:border-mcgill-red"
-                    />
-                  </div>
-                )}
-              </div>
 
-              {/* Personality Sliders */}
-              <div className="mb-8">
-                <span className="text-[10px] font-black text-mcgill-red uppercase tracking-[0.3em] mb-3 block">
-                  ⚙️ Personality Tuning
-                </span>
-                <div className="space-y-4">
+                    <button
+                      onClick={() =>
+                        setPendingCoachSettings((prev) => ({
+                          ...prev,
+                          focusOutfit: !prev.focusOutfit,
+                        }))
+                      }
+                      className={`w-full px-3 py-2 rounded-lg text-xs font-bold transition-all text-left border ${
+                        pendingCoachSettings.focusOutfit
+                          ? "bg-mcgill-red text-white border-mcgill-red"
+                          : "bg-white/5 text-white/70 border-white/10 hover:border-white/30"
+                      }`}
+                    >
+                      Outfit & presentation
+                    </button>
+
+                    <button
+                      onClick={() =>
+                        setPendingCoachSettings((prev) => ({
+                          ...prev,
+                          focusFacialExpressions: !prev.focusFacialExpressions,
+                        }))
+                      }
+                      className={`w-full px-3 py-2 rounded-lg text-xs font-bold transition-all text-left border ${
+                        pendingCoachSettings.focusFacialExpressions
+                          ? "bg-mcgill-red text-white border-mcgill-red"
+                          : "bg-white/5 text-white/70 border-white/10 hover:border-white/30"
+                      }`}
+                    >
+                      Facial expressions
+                    </button>
+                  </div>
+
+                  <div className="mt-4">
+                    <div className="flex justify-between items-center mb-2">
+                      <label className="text-[9px] text-white/70 font-bold">Coach Strictness</label>
+                      <span className="text-[9px] font-bold text-mcgill-red">{pendingCoachSettings.strictness}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={pendingCoachSettings.strictness}
+                      onChange={(e) =>
+                        setPendingCoachSettings((prev) => ({
+                          ...prev,
+                          strictness: parseInt(e.target.value),
+                        }))
+                      }
+                      className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-mcgill-red"
+                    />
+                    <div className="flex justify-between text-[8px] text-white/40 mt-1">
+                      <span>Gentle</span>
+                      <span>Direct</span>
+                    </div>
+                  </div>
+
+                  <div className="mt-5">
+                    <button
+                      onClick={applyCoachChanges}
+                      disabled={!hasPendingCoachChanges}
+                      className={`w-full px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all border ${
+                        hasPendingCoachChanges
+                          ? "bg-mcgill-red text-white border-mcgill-red hover:bg-red-600"
+                          : "bg-white/5 text-white/30 border-white/10 cursor-not-allowed"
+                      }`}
+                    >
+                      Apply Coach Settings
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {practiceMode === "roleplay" && (
+                <>
+                  {/* AI Role Selection */}
+                  <div className="mb-8">
+                    <span className="text-[10px] font-black text-mcgill-red uppercase tracking-[0.3em] mb-3 block">
+                      🎭 AI Role
+                    </span>
+                    <div className="space-y-2">
+                      {roleOptions.map((role) => (
+                        <button
+                          key={role}
+                          onClick={() => {
+                            setPendingRole(role);
+                            setPendingCustomRole("");
+                            setShowCustomRoleInput(false);
+                          }}
+                          className={`w-full px-3 py-2 rounded-lg text-xs font-bold transition-all text-left ${
+                            pendingRole === role && !pendingCustomRole.trim()
+                              ? "bg-mcgill-red text-white"
+                              : "bg-white/5 border border-white/10 text-white/70 hover:border-white/30"
+                          }`}
+                        >
+                          {role}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => setShowCustomRoleInput(!showCustomRoleInput)}
+                        className="w-full px-3 py-2 rounded-lg text-xs font-bold transition-all text-left bg-white/5 border border-dashed border-white/30 text-white/70 hover:border-white/50"
+                      >
+                        ✨ Custom Role
+                      </button>
+                    </div>
+                    {showCustomRoleInput && (
+                      <div className="mt-3 p-3 bg-white/5 rounded-lg animate-in fade-in">
+                        <input
+                          type="text"
+                          placeholder="Define your own role..."
+                          value={pendingCustomRole}
+                          onChange={(e) => setPendingCustomRole(e.target.value)}
+                          className="w-full px-2 py-2 bg-white/10 border border-white/20 rounded text-xs text-white placeholder-white/30 focus:outline-none focus:border-mcgill-red"
+                        />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Personality Sliders */}
+                  <div className="mb-8">
+                    <span className="text-[10px] font-black text-mcgill-red uppercase tracking-[0.3em] mb-3 block">
+                      ⚙️ Personality Tuning
+                    </span>
+                    <div className="space-y-4">
                   {/* Pressure Slider */}
                   <div>
                     <div className="flex justify-between items-center mb-2">
@@ -1153,36 +1434,38 @@ Be encouraging but authentic to your assigned role. Reference McGill campus cont
                       <span>Formal</span>
                     </div>
                   </div>
-                </div>
-              </div>
-
-              {/* Apply Changes */}
-              <div className="mb-8">
-                <button
-                  onClick={applyChanges}
-                  disabled={!hasPendingChanges}
-                  className={`w-full px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all border ${
-                    hasPendingChanges
-                      ? "bg-mcgill-red text-white border-mcgill-red hover:bg-red-600"
-                      : "bg-white/5 text-white/30 border-white/10 cursor-not-allowed"
-                  }`}
-                >
-                  Apply Changes
-                </button>
-              </div>
-
-              {/* Current Role Display */}
-              {(pendingRole || pendingCustomRole) && (
-                <div className="pt-6 border-t border-white/10">
-                  <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-xl">
-                    <p className="text-[10px] text-emerald-300 font-black mb-1">Pending Persona</p>
-                    <p className="text-sm text-white font-bold break-words">{pendingPersonaText}</p>
+                    </div>
                   </div>
-                </div>
+
+                  {/* Apply Changes */}
+                  <div className="mb-8">
+                    <button
+                      onClick={applyChanges}
+                      disabled={!hasPendingChanges}
+                      className={`w-full px-4 py-3 rounded-xl text-[10px] font-black uppercase tracking-[0.2em] transition-all border ${
+                        hasPendingChanges
+                          ? "bg-mcgill-red text-white border-mcgill-red hover:bg-red-600"
+                          : "bg-white/5 text-white/30 border-white/10 cursor-not-allowed"
+                      }`}
+                    >
+                      Apply Changes
+                    </button>
+                  </div>
+
+                  {/* Current Role Display */}
+                  {(pendingRole || pendingCustomRole) && (
+                    <div className="pt-6 border-t border-white/10">
+                      <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-xl">
+                        <p className="text-[10px] text-emerald-300 font-black mb-1">Pending Persona</p>
+                        <p className="text-sm text-white font-bold break-words">{pendingPersonaText}</p>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
               </div>
               {/* Sticky Current Persona at Bottom */}
-              {(selectedRole || customRole) && (
+              {practiceMode === "roleplay" && (selectedRole || customRole) && (
                 <div className="pt-6 border-t border-white/10 mt-auto">
                   <div className="bg-emerald-500/10 border border-emerald-500/30 p-4 rounded-xl">
                     <p className="text-[10px] text-emerald-300 font-black mb-1">Active Persona</p>
