@@ -74,7 +74,7 @@ export const getMatchReason = async (itemTitle: string, userInterests: string[])
   try {
     const ai = getAI();
     const response = await ai.models.generateContent({
-      model: 'gemini-3-pro-preview',
+      model: 'gemini-3-flash-preview',
       contents: `Briefly explain in 10 words why a student interested in ${userInterests.join(', ')} would match with "${itemTitle}".`,
     });
     return response.text;
