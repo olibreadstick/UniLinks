@@ -75,10 +75,10 @@ UniConnex is a comprehensive student networking platform designed specifically f
    
    Create a `.env.local` file in the root directory:
    ```bash
-   API_KEY=your_gemini_api_key_here
+   GEMINI_API_KEY=your_gemini_api_key_here
    ```
    
-   Replace `your_gemini_api_key_here` with your actual Gemini API key.
+   Replace `your_gemini_api_key_here` with your actual Gemini API key from [Google AI Studio](https://ai.google.dev/).
 
 4. **Run the development server**
    ```bash
@@ -87,7 +87,7 @@ UniConnex is a comprehensive student networking platform designed specifically f
 
 5. **Open your browser**
    
-   Navigate to `http://localhost:5173` (or the port shown in your terminal)
+   Navigate to `http://localhost:3000` (or the port shown in your terminal)
 
 ---
 
