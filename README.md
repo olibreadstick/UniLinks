@@ -7,6 +7,7 @@
 ---
 
 ## 🎯 Overview
+<img width="1532" height="783" alt="UniLinks" src="https://github.com/user-attachments/assets/09b32269-e76b-4491-8367-2001a88fdf8f" />
 
 UniConnex is a comprehensive student networking platform designed specifically for university students to connect, collaborate, and grow their social and professional networks. Built with AI-powered features, UniConnex helps students discover events, find collaboration partners, join clubs, and improve their social skills through interactive AI coaching.
 
